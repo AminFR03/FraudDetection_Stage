@@ -1,0 +1,12 @@
+# Ignore only the large dataset
+data/creditcard.csv
+
+# Python
+__pycache__/
+*.py[cod]
+
+# Environment
+.env
+
+# Jupyter
+.ipynb_checkpoints/
