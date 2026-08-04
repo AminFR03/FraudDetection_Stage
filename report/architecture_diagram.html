@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Architecture Agentic AI & Federated Learning — Détection de Fraude</title>
+    <style>
+        :root {
+            --bg-color: #0b0f19;
+            --card-bg: #151c2c;
+            --accent-blue: #3b82f6;
+            --accent-purple: #8b5cf6;
+            --accent-green: #10b981;
+            --accent-red: #ef4444;
+            --text-main: #f3f4f6;
+            --text-muted: #9ca3af;
+            --border-color: #1f2937;
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            margin: 0;
+            padding: 20px;
+            line-height: 1.5;
+        }
+
+        header {
+            text-align: center;
+            padding: 20px 0;
+            border-bottom: 1px solid var(--border-color);
+            margin-bottom: 30px;
+        }
+
+        h1 {
+            color: #ffffff;
+            font-size: 2rem;
+            margin: 0 0 10px 0;
+            background: linear-gradient(90deg, #60a5fa, #c084fc);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .subtitle {
+            color: var(--text-muted);
+            font-size: 1rem;
+        }
+
+        .container {
+            max-width: 1300px;
+            margin: 0 auto;
+        }
+
+        /* Blueprint 8-Steps Navbar */
+        .blueprint-nav {
+            display: flex;
+            gap: 10px;
+            overflow-x: auto;
+            padding-bottom: 15px;
+            margin-bottom: 25px;
+        }
+
+        .step-badge {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 10px 15px;
+            font-size: 0.85rem;
+            white-space: nowrap;
+            color: var(--text-muted);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .step-badge.active, .step-badge:hover {
+            border-color: var(--accent-blue);
+            color: #fff;
+            background: rgba(59, 130, 246, 0.15);
+        }
+
+        .step-badge span {
+            color: var(--accent-purple);
+            font-weight: bold;
+            margin-right: 5px;
+        }
+
+        /* Main Architecture Grid */
+        .arch-grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 20px;
+        }
+
+        .card {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 10px;
+        }
+
+        .card-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: #60a5fa;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        /* Pipeline Visualizer */
+        .pipeline-flow {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            position: relative;
+        }
+
+        .agent-node {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 10px;
+            padding: 15px;
+            display: grid;
+            grid-template-columns: 50px 1fr 120px;
+            align-items: center;
+            gap: 15px;
+            transition: transform 0.2s;
+        }
+
+        .agent-node:hover {
+            transform: translateX(5px);
+            border-color: var(--accent-blue);
+        }
+
+        .agent-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 8px;
+            background: rgba(139, 92, 246, 0.2);
+            color: var(--accent-purple);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            font-weight: bold;
+        }
+
+        .agent-info h4 {
+            margin: 0 0 5px 0;
+            font-size: 1rem;
+            color: #fff;
+        }
+
+        .agent-info p {
+            margin: 0;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+        }
+
+        .agent-badge {
+            font-size: 0.75rem;
+            padding: 4px 8px;
+            border-radius: 4px;
+            text-align: center;
+            font-weight: 600;
+        }
+
+        .badge-fast { background: rgba(16, 185, 129, 0.2); color: var(--accent-green); }
+        .badge-ml { background: rgba(59, 130, 246, 0.2); color: var(--accent-blue); }
+        .badge-rule { background: rgba(245, 158, 11, 0.2); color: #f59e0b; }
+        .badge-llm { background: rgba(139, 92, 246, 0.2); color: var(--accent-purple); }
+
+        /* Memory Stack */
+        .memory-stack {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .memory-item {
+            background: #1e293b;
+            padding: 12px 15px;
+            border-radius: 8px;
+            border-left: 4px solid var(--accent-blue);
+        }
+
+        .memory-item.working { border-left-color: var(--accent-green); }
+        .memory-item.episodic { border-left-color: var(--accent-blue); }
+        .memory-item.semantic { border-left-color: var(--accent-purple); }
+        .memory-item.longterm { border-left-color: #ec4899; }
+
+        .memory-title {
+            font-weight: 600;
+            font-size: 0.9rem;
+            color: #fff;
+            margin-bottom: 4px;
+        }
+
+        .memory-desc {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+
+        /* Metrics Grid */
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 10px;
+        }
+
+        .metric-card {
+            background: #1e293b;
+            padding: 12px;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .metric-val {
+            font-size: 1.3rem;
+            font-weight: 700;
+            color: var(--accent-green);
+        }
+
+        .metric-lbl {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-top: 4px;
+        }
+
+        footer {
+            text-align: center;
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid var(--border-color);
+            color: var(--text-muted);
+            font-size: 0.85rem;
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>Architecture Agentic AI — Détection de Fraude Bancaire</h1>
+    <div class="subtitle">Cadre Blueprint 8 Étapes (AI For Leaders) & Coordination Federated Learning</div>
+</header>
+
+<div class="container">
+    <!-- Blueprint 8-Steps Nav -->
+    <div class="blueprint-nav">
+        <div class="step-badge active"><span>1.</span> Purpose & Scope</div>
+        <div class="step-badge"><span>2.</span> System Prompt</div>
+        <div class="step-badge"><span>3.</span> LLM Selection</div>
+        <div class="step-badge"><span>4.</span> Tools Suite</div>
+        <div class="step-badge"><span>5.</span> Memory Systems</div>
+        <div class="step-badge"><span>6.</span> Orchestration</div>
+        <div class="step-badge"><span>7.</span> User Interface</div>
+        <div class="step-badge"><span>8.</span> Testing & Evals</div>
+    </div>
+
+    <div class="arch-grid">
+        <!-- Main Column: Agent Pipeline -->
+        <div>
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">🤖 Pipeline Multi-Agents Orchestré</div>
+                    <span class="agent-badge badge-ml">Workflow Adaptatif</span>
+                </div>
+
+                <div class="pipeline-flow">
+                    <!-- Orchestrator -->
+                    <div class="agent-node" style="border-color: var(--accent-purple);">
+                        <div class="agent-icon" style="background: rgba(139, 92, 246, 0.3);">🧠</div>
+                        <div class="agent-info">
+                            <h4>0. OrchestratorAgent (Chef d'Orchestre)</h4>
+                            <p>Routing intelligent, gestion des workflows (Fast-Track / Standard / Escalation) et consolidation.</p>
+                        </div>
+                        <span class="agent-badge badge-llm">Orchestration</span>
+                    </div>
+
+                    <!-- Agent 1 -->
+                    <div class="agent-node">
+                        <div class="agent-icon">1</div>
+                        <div class="agent-info">
+                            <h4>SurveillanceAgent (Ingestion & Pre-filtering)</h4>
+                            <p>Filtrage rapide par règles métier. Rejet immédiat si non-suspect (< 5 ms).</p>
+                        </div>
+                        <span class="agent-badge badge-fast">Fast-Track</span>
+                    </div>
+
+                    <!-- Agent 2 -->
+                    <div class="agent-node">
+                        <div class="agent-icon">2</div>
+                        <div class="agent-info">
+                            <h4>AnalysisAgent (ML Scoring & SHAP)</h4>
+                            <p>Calcul de probabilité via XGBoost/FL + extraction du Top-5 features SHAP.</p>
+                        </div>
+                        <span class="agent-badge badge-ml">Scoring ML</span>
+                    </div>
+
+                    <!-- Agent 3 -->
+                    <div class="agent-node">
+                        <div class="agent-icon">3</div>
+                        <div class="agent-info">
+                            <h4>DecisionAgent (Gouvernance & Alertes)</h4>
+                            <p>Règles de décision métier (BLOCK / REVIEW / ALERT / ALLOW) et déclenchement d'alertes.</p>
+                        </div>
+                        <span class="agent-badge badge-rule">Décision</span>
+                    </div>
+
+                    <!-- Agent 4 -->
+                    <div class="agent-node">
+                        <div class="agent-icon">4</div>
+                        <div class="agent-info">
+                            <h4>ExplanationAgent (LLM NLG)</h4>
+                            <p>Génération de rapport naturel en français via Gemini 2.5 Flash avec fallback hors-ligne.</p>
+                        </div>
+                        <span class="agent-badge badge-llm">Gemini 2.5</span>
+                    </div>
+
+                    <!-- Feedback & Monitoring -->
+                    <div class="agent-node" style="opacity: 0.85;">
+                        <div class="agent-icon">5-6</div>
+                        <div class="agent-info">
+                            <h4>FeedbackAgent & MonitoringAgent</h4>
+                            <p>Human-in-the-loop (validation analyste) et surveillance de la dérive de performance/data drift.</p>
+                        </div>
+                        <span class="agent-badge badge-fast">Feedback</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Performance Metrics Card -->
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">⚡ Métriques d'Évaluation & Performance</div>
+                    <span style="font-size: 0.8rem; color: var(--text-muted);">Step 8: Evals</span>
+                </div>
+                <div class="metrics-grid">
+                    <div class="metric-card">
+                        <div class="metric-val">< 5 ms</div>
+                        <div class="metric-lbl">Latence Fast-Track</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-val">~850 ms</div>
+                        <div class="metric-lbl">Latence LLM Complete</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-val">0.8159</div>
+                        <div class="metric-lbl">F1-Score (FedAvg)</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-val">60-75%</div>
+                        <div class="metric-lbl">Taux Rejet Précoce</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Column: Memory Systems & Tools -->
+        <div>
+            <!-- Memory System Card -->
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">💾 System Memory (Step 5)</div>
+                </div>
+                <div class="memory-stack">
+                    <div class="memory-item working">
+                        <div class="memory-title">1. Working Memory</div>
+                        <div class="memory-desc">Contexte volatile de la transaction courante en RAM.</div>
+                    </div>
+                    <div class="memory-item episodic">
+                        <div class="memory-title">2. Episodic Memory</div>
+                        <div class="memory-desc">Historique glissant (N=1000) pour contexte few-shot LLM.</div>
+                    </div>
+                    <div class="memory-item semantic">
+                        <div class="memory-title">3. Semantic Memory</div>
+                        <div class="memory-desc">Base de connaissances des patterns de fraude connus.</div>
+                    </div>
+                    <div class="memory-item longterm">
+                        <div class="memory-title">4. Long-Term Memory</div>
+                        <div class="memory-desc">Persistance SQLite des décisions et feedbacks.</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tools Card -->
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">🛠️ Suite d'Outils (Step 4)</div>
+                </div>
+                <ul style="padding-left: 20px; font-size: 0.85rem; color: var(--text-muted); margin: 0;">
+                    <li style="margin-bottom: 8px;"><strong style="color: #fff;">MLModelTool</strong> : Inférence XGBoost/FL</li>
+                    <li style="margin-bottom: 8px;"><strong style="color: #fff;">SHAPTool</strong> : TreeExplainer & Top-N</li>
+                    <li style="margin-bottom: 8px;"><strong style="color: #fff;">LLMGatewayTool</strong> : API Gemini 2.5</li>
+                    <li style="margin-bottom: 8px;"><strong style="color: #fff;">AlertTool</strong> : Notifications JSONL / Slack</li>
+                    <li style="margin-bottom: 8px;"><strong style="color: #fff;">DatabaseTool</strong> : Interrogation SQLite</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<footer>
+    Projet de Stage - Détection de Fraude Bancaire basée sur l'Agentic AI, LLMs et Federated Learning | 2026
+</footer>
+
+</body>
+</html>

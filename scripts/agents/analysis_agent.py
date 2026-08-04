@@ -1,182 +1,68 @@
 """
-analysis_agent.py — Agent 2 : Analyse ML + Explainabilité SHAP
-Stage : Système Multi-Agents de Détection de Fraude
+analysis_agent.py — Agent 2 : Analyse ML & Explicabilité SHAP
+Stage : Système Agentic AI de Détection de Fraude Bancaire
+
+Transformé pour intégrer BaseAgent et utiliser MLModelTool / SHAPExplainabilityTool.
 """
 
 import numpy as np
+from typing import Dict, Any
+from scripts.agents.core.agent_base import BaseAgent
+from scripts.agents.core.tools import MLModelTool, SHAPExplainabilityTool
 
 
-class AnalysisAgent:
+class AnalysisAgent(BaseAgent):
     """
-    Agent 2 — Analyse par modèle ML/DL et explainabilité SHAP.
-
-    Rôle :
-    1. Charger un modèle entraîné (XGBoost, RF, MLP, etc.)
-    2. Calculer la probabilité de fraude pour une transaction
-    3. Extraire les valeurs SHAP (top-N features les plus influentes)
-    4. Retourner le niveau de risque et les justifications chiffrées
-
-    Input  ← Transaction dict {feature: value} (transmis par Agent 1)
-    Output → {probability, risk_level, shap_top5, all_shap}
+    Agent 2 — Analyse ML + SHAP Explainability.
     """
 
-    # Niveaux de risque basés sur la probabilité de fraude
-    RISK_LEVELS = {
-        'CRITIQUE': 0.85,
-        'ÉLEVÉ':    0.60,
-        'MOYEN':    0.35,
-        'FAIBLE':   0.00,
-    }
+    AGENT_NAME = "AnalysisAgent"
+    AGENT_ROLE = "Scoring ML & Explicabilité"
+    AGENT_PURPOSE = "Calculer la probabilité de fraude et extraire les explications SHAP"
 
-    def __init__(self, model, shap_explainer, scaler, feature_names, top_n=5):
-        """
-        Args:
-            model: modèle entraîné (scikit-learn compatible, avec predict_proba)
-            shap_explainer: objet SHAP (TreeExplainer, LinearExplainer, etc.)
-            scaler: StandardScaler/RobustScaler (déjà fité sur les données)
-            feature_names: list[str] des noms de features
-            top_n: nombre de features SHAP à retourner
-        """
-        self.model         = model
-        self.explainer     = shap_explainer
-        self.scaler        = scaler
-        self.feature_names = feature_names
-        self.top_n         = top_n
-        self._analyses     = 0
+    def __init__(self, model=None, shap_explainer=None, scaler=None,
+                 feature_names: list = None, top_n: int = 5,
+                 config: dict = None, memory=None, tools: dict = None):
+        
+        tools = tools or {}
+        if model and 'ml_tool' not in tools:
+            tools['ml_tool'] = MLModelTool(model=model, scaler=scaler, feature_names=feature_names)
+        if shap_explainer and 'shap_tool' not in tools:
+            tools['shap_tool'] = SHAPExplainabilityTool(explainer=shap_explainer, feature_names=feature_names, top_n=top_n)
 
-    # ─────────────────────────────────────────────────────────────────────────
-    # API principale
-    # ─────────────────────────────────────────────────────────────────────────
+        super().__init__(config=config, memory=memory, tools=tools)
+        self.feature_names = feature_names or []
+        self.top_n = top_n
 
-    def analyze(self, transaction: dict) -> dict:
-        """
-        Analyse complète d'une transaction : probabilité + SHAP.
+    def process(self, input_data: dict, context: dict = None) -> dict:
+        transaction = input_data.get('transaction', input_data)
 
-        Args:
-            transaction: dict {feature_name: float_value}
-                         Les valeurs doivent être dans l'espace ORIGINAL
-                         (le scaler est appliqué ici).
+        # 1. Prédiction ML
+        ml_res = {}
+        if 'ml_tool' in self.tools:
+            ml_res = self.use_tool('ml_tool', transaction=transaction)
+        else:
+            # Fallback direct si l'outil n'est pas instancié sous forme de classe Tool
+            ml_res = {'probability': 0.5, 'risk_level': 'MOYEN'}
 
-        Returns:
-            dict {
-                'probability': float,
-                'risk_level': str,
-                'shap_top_n': list[dict],  # Features les plus influentes
-                'all_shap': dict,
-                'base_value': float,       # Valeur de base SHAP
-            }
-        """
-        self._analyses += 1
+        probability = ml_res.get('probability', 0.0)
+        risk_level = ml_res.get('risk_level', 'MOYEN')
 
-        # ── Préparation du vecteur de features ────────────────────────────────
+        # 2. Explicabilité SHAP
         feat_values = np.array([[transaction.get(f, 0.0) for f in self.feature_names]])
+        shap_res = {}
+        if 'shap_tool' in self.tools:
+            shap_res = self.use_tool('shap_tool', features_array=feat_values, top_n=self.top_n)
 
-        # ── Probabilité de fraude ─────────────────────────────────────────────
-        prob = float(self.model.predict_proba(feat_values)[:, 1][0])
-
-        # ── Niveau de risque ──────────────────────────────────────────────────
-        risk_level = 'FAIBLE'
-        for level, threshold in self.RISK_LEVELS.items():
-            if prob >= threshold:
-                risk_level = level
-                break
-
-        # ── Valeurs SHAP ──────────────────────────────────────────────────────
-        try:
-            shap_output = self.explainer.shap_values(feat_values)
-            # TreeExplainer peut retourner liste [class0, class1] pour classification binaire
-            if isinstance(shap_output, list) and len(shap_output) == 2:
-                shap_vals = shap_output[1][0]  # Classe fraude (index 1)
-            else:
-                shap_vals = shap_output[0]
-
-            base_value = float(self.explainer.expected_value) \
-                if not isinstance(self.explainer.expected_value, (list, np.ndarray)) \
-                else float(self.explainer.expected_value[1])
-
-        except Exception as e:
-            # Fallback : SHAP nul si le calcul échoue
-            shap_vals = np.zeros(len(self.feature_names))
-            base_value = 0.0
-            print(f"[AnalysisAgent] Avertissement SHAP: {e}")
-
-        # ── Top-N features les plus influentes ────────────────────────────────
-        shap_importance = list(zip(
-            self.feature_names,
-            feat_values[0],
-            shap_vals
-        ))
-        shap_importance.sort(key=lambda x: abs(x[2]), reverse=True)
-
-        top_n_features = [
-            {
-                'feature':    feat,
-                'value':      round(float(val), 4),
-                'shap':       round(float(shap), 4),
-                'direction':  'AUGMENTE risque fraude' if shap > 0 else 'RÉDUIT risque fraude',
-                'impact_pct': round(abs(float(shap)) / (sum(abs(s) for _, _, s in shap_importance) + 1e-8) * 100, 1)
-            }
-            for feat, val, shap in shap_importance[:self.top_n]
-        ]
+        top_features = shap_res.get('shap_top_n', [])
+        all_shap = shap_res.get('all_shap', {})
+        base_val = shap_res.get('base_value', 0.0)
 
         return {
-            'probability':  round(prob, 4),
-            'risk_level':   risk_level,
-            'shap_top_n':   top_n_features,
-            'all_shap':     dict(zip(self.feature_names, shap_vals.tolist())),
-            'base_value':   round(base_value, 4),
+            'probability': probability,
+            'risk_level': risk_level,
+            'shap_top5': top_features,
+            'shap_top_n': top_features,
+            'all_shap': all_shap,
+            'base_value': base_val,
         }
-
-    def analyze_batch(self, transactions: list) -> list:
-        """Analyse un lot de transactions."""
-        return [self.analyze(tx) for tx in transactions]
-
-    # ─────────────────────────────────────────────────────────────────────────
-    # Analyse SHAP globale (summary)
-    # ─────────────────────────────────────────────────────────────────────────
-
-    def global_shap_summary(self, X_sample: np.ndarray, plot=True):
-        """
-        Calcule et affiche le graphe de résumé SHAP global.
-
-        Args:
-            X_sample: tableau numpy (N, n_features) — échantillon du test set
-            plot: si True, affiche le graphe
-        """
-        import shap
-        import matplotlib.pyplot as plt
-
-        print(f"[AnalysisAgent] Calcul SHAP sur {len(X_sample)} échantillons...")
-        shap_output = self.explainer.shap_values(X_sample)
-
-        if isinstance(shap_output, list) and len(shap_output) == 2:
-            shap_vals = shap_output[1]
-        else:
-            shap_vals = shap_output
-
-        if plot:
-            plt.figure(figsize=(10, 6))
-            shap.summary_plot(shap_vals, X_sample,
-                              feature_names=self.feature_names,
-                              plot_type='bar', show=False)
-            plt.title("SHAP — Importance Globale des Features", fontsize=14, fontweight='bold')
-            plt.tight_layout()
-            plt.show()
-
-            plt.figure(figsize=(10, 8))
-            shap.summary_plot(shap_vals, X_sample,
-                              feature_names=self.feature_names,
-                              show=False)
-            plt.title("SHAP — Distribution des Valeurs (Beeswarm)", fontsize=14, fontweight='bold')
-            plt.tight_layout()
-            plt.show()
-
-        return shap_vals
-
-    # ─────────────────────────────────────────────────────────────────────────
-    # Statistiques
-    # ─────────────────────────────────────────────────────────────────────────
-
-    @property
-    def analyses_count(self):
-        return self._analyses
