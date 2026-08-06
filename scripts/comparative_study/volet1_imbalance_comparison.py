@@ -8,6 +8,10 @@ sur les deux datasets (ULB et Synthétique), avec XGBoost à hyperparamètres fi
 
 import os
 import sys
+
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8')
+
 import numpy as np
 import pandas as pd
 import matplotlib

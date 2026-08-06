@@ -1,7 +1,7 @@
 # Analyse Critique — Étude Comparative
 
 > **Projet** : Amélioration de la détection de fraude bancaire — Agentic AI, LLMs et Federated Learning
-> **Date** : 25/07/2026
+> **Date** : 04/08/2026
 > **Modèle** : XGBoost (n_estimators=200, max_depth=5, lr=0.1)
 > **Seed** : 42 | **Split** : 80/20 stratifié
 
@@ -74,6 +74,7 @@ Le Federated Learning introduit une perte de performance par rapport au modèle 
 1. **Fragmentation des données** : Chaque client ne voit qu'1/25ème du dataset, ce qui réduit la diversité des patterns observés.
 2. **Déséquilibre local exacerbé** : Les rares fraudes sont réparties sur 25 partitions, certains clients n'en ayant que très peu.
 3. **Agrégation par Soft Voting** : Contrairement au vrai FedAvg (moyenne des poids de réseaux de neurones), le Soft Voting sur des modèles XGBoost est une approximation qui ne bénéficie pas de la même convergence.
+4. **Catastrophe sur le Synthétique (F1=0.14)** : Le dataset synthétique utilise un One-Hot Encoding massif pour les catégories (marchands, villes). Répartir ces colonnes ultra-creuses sur 25 clients détruit complètement l'information locale, rendant l'apprentissage de chaque arbre local impossible.
 
 **Cependant**, cette perte est compensée par les avantages du FL :
 

@@ -1,5 +1,6 @@
-# Ignore only the large dataset
+# Ignore datasets
 data/creditcard.csv
+data/fraud_detection_credit_card_small.csv
 
 # Python
 __pycache__/

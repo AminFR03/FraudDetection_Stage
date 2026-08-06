@@ -8,6 +8,10 @@ avec les MÊMES hyperparamètres XGBoost pour garantir une comparaison équitabl
 
 import os
 import sys
+
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8')
+
 import numpy as np
 import pandas as pd
 import matplotlib

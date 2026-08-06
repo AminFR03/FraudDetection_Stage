@@ -108,10 +108,10 @@ transaction = {'V1': ..., 'V2': ..., ..., 'V28': ..., 'Amount': ...}
 
 | Métrique | Valeur |
 |:---|:---:|
-| **F1-Score** (XGBoost fédéré) | 0.8159 |
-| **AUC-ROC** | 0.9788 |
-| **Recall** | 83.67% |
-| **Precision** | 79.61% |
+| **F1-Score** (XGBoost fédéré) | 0.8083 |
+| **AUC-ROC** | 0.9752 |
+| **Recall** | 79.59% |
+| **Precision** | 82.11% |
 | **Latence analyse** (pred + SHAP) | < 100 ms |
 
 ---
@@ -161,7 +161,7 @@ probability = 0.92  # Float [0,1], issu de l'Agent 2
 
 ---
 
-## 5. Agent 4 — Explication LLM (Google Gemini 1.5 Flash)
+## 5. Agent 4 — Explication LLM (Google Gemini 2.5 Flash)
 
 ### Objectif
 Transformer la sortie mathématique en un **rapport en langage naturel français**, compréhensible par un analyste non technique. L'agent répond à : *"Pourquoi cette transaction a-t-elle été signalée ?"*
@@ -211,7 +211,7 @@ ACTION : Transaction refusée. Dossier fraude ouvert.
 Notifications : equipe_fraude, client, conformite | SLA : 0 min
 ```
 
-### LLM utilisé : Google Gemini 1.5 Flash
+### LLM utilisé : Google Gemini 2.5 Flash
 - Prompt structuré garantissant des réponses professionnelles en français
 - Mode **fallback offline** (template Python) si API indisponible
 
@@ -235,10 +235,10 @@ Notifications : equipe_fraude, client, conformite | SLA : 0 min
 | Latence Fast-Track (Agent 1 seul) | < 5 ms |
 | Latence Analyse ML + SHAP (Agent 2) | < 100 ms |
 | Latence Pipeline complet avec LLM | 1.2 – 2.5 s |
-| F1-Score (XGBoost fédéré embarqué) | 0.8159 |
-| AUC-ROC | 0.9788 |
-| Recall (détection fraude) | 83.67% |
-| Taux de fausses alertes | 20.39% (1 – Precision) |
+| F1-Score (XGBoost fédéré embarqué) | 0.8083 |
+| AUC-ROC | 0.9752 |
+| Recall (détection fraude) | 79.59% |
+| Taux de fausses alertes | 17.89% (1 – Precision) |
 
 ---
 *Document généré dans le cadre du projet de fin de stage — Détection de Fraude Bancaire avec Federated Learning & Agentic AI.*

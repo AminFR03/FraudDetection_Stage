@@ -87,20 +87,17 @@ Ce projet vise à développer un système complet de détection de fraude bancai
 
 | Modèle | Catégorie | Entraînement | Dataset | Resampling | Accuracy | Precision | Recall | F1-Score | AUC-ROC | AUPRC |
 |:---|:---:|:---:|:---:|:---:|---:|---:|---:|---:|---:|---:|
-| **XGBoost** | ML | Centralisé | ULB | SMOTE | 0.9998 | 0.9398 | 0.7959 | **0.8619** | 0.9833 | 0.8635 |
-| **MLP** | DL | Centralisé | ULB | SMOTE | 0.9998 | 0.8317 | 0.8571 | 0.8442 | 0.9752 | - |
-| **Random Forest** | ML | Centralisé | ULB | SMOTE | 0.9997 | 0.8280 | 0.7857 | 0.8063 | 0.9855 | 0.8024 |
-| **CNN 1D** | DL | Centralisé | ULB | SMOTE | 0.9998 | 0.8119 | 0.8367 | 0.8241 | 0.9830 | - |
-| **XGBoost (Fédéré)** | ML | Fédéré | ULB | SMOTE | 0.9997 | 0.7961 | 0.8367 | 0.8159 | 0.9788 | - |
-| **CNN+LSTM** | DL | Centralisé | ULB | SMOTE | 0.9997 | 0.6693 | 0.8673 | 0.7556 | 0.9639 | - |
-| **Logistic Regression** | ML | Centralisé | ULB | SMOTE | 0.9981 | 0.5621 | 0.8776 | 0.6853 | 0.9714 | 0.7245 |
-| **XGBoost (Sans resampling)** | ML | Centralisé | ULB | Aucun | 0.9982 | 0.9268 | 0.7755 | 0.8444 | 0.9428 | - |
-| **XGBoost (ADASYN)** | ML | Centralisé | ULB | ADASYN | 0.9997 | 0.8721 | 0.7653 | 0.8152 | 0.9813 | - |
-| **XGBoost (Undersampling)** | ML | Centralisé | ULB | Undersampling | 0.9900 | 0.2019 | 0.8673 | 0.3276 | 0.9736 | - |
+| **XGBoost (Baseline)** | ML | Centralisé | ULB | Aucun | 0.9995 | 0.9286 | 0.7959 | **0.8571** | 0.9778 | 0.8724 |
+| **XGBoost (Fédéré)** | ML | Fédéré | ULB | SMOTE | 0.9994 | 0.8211 | 0.7959 | 0.8083 | 0.9752 | 0.8293 |
+| **XGBoost (ADASYN)** | ML | Centralisé | Synth | ADASYN | 0.9959 | 0.6397 | 0.7250 | 0.6797 | 0.9761 | 0.7245 |
+| **XGBoost (SMOTE)** | ML | Centralisé | ULB | SMOTE | 0.9981 | 0.4649 | 0.8776 | 0.6078 | 0.9833 | 0.8635 |
+| **XGBoost (Fédéré Synth)**| ML | Fédéré | Synth | SMOTE | 0.9942 | 0.6250 | 0.0833 | 0.1471 | 0.9587 | 0.5034 |
+| **XGBoost (Undersamp)**| ML | Centralisé | ULB | Undersampling | 0.9593 | 0.0375 | 0.9184 | 0.0720 | 0.9776 | 0.6865 |
 
 **Légende :**
-- **En gras** : Meilleur score F1 (métrique principale)
+- **En gras** : Meilleurs scores F1 par catégorie
 - **ULB** : Dataset anonymisé avec features PCA (30 features)
+- **Synth** : Dataset Synthétique (Credit Card Transactions)
 - **SMOTE** : Synthetic Minority Over-sampling Technique
 - **ADASYN** : Adaptive Synthetic Sampling
 
@@ -365,7 +362,7 @@ Notifications envoyées: equipe_fraude, client, conformite
 ```
 
 **LLM utilisé :**
-- Google Gemini 1.5 Flash
+- Google Gemini 2.5 Flash
 - Mode fallback hors-ligne si API non disponible
 - Prompt structuré pour garantir des réponses professionnelles
 
@@ -393,11 +390,11 @@ Notifications envoyées: equipe_fraude, client, conformite
   - Pipeline complet avec LLM : 1.2s - 2.5s
 - **Distribution des décisions** : BLOCK/REVIEW/ALERT/ALLOW
 
-**Performance de détection :**
-- **F1-Score global** : 0.8159 (XGBoost fédéré)
-- **AUC-ROC** : 0.9788
-- **Taux de détection de fraude** : 83.67% (Recall)
-- **Taux de fausses alertes** : 20.39% (1 - Precision)
+**Performance de détection (XGBoost Fédéré sur ULB) :**
+- **F1-Score global** : 0.8083 (XGBoost fédéré)
+- **AUC-ROC** : 0.9752
+- **Taux de détection de fraude** : 79.59% (Recall)
+- **Taux de fausses alertes** : 17.89% (1 - Precision)
 
 ---
 
@@ -486,18 +483,25 @@ Notifications envoyées: equipe_fraude, client, conformite
 
 ### Impact du Resampling (sur XGBoost avec hyperparamètres fixes)
 
+**Dataset ULB :**
 | Méthode | Precision | Recall | F1-Score | Observation |
 |:---|---:|---:|---:|:---|
-| **Aucun (brut)** | 0.9268 | 0.7755 | 0.8444 | Beaucoup trop de fraudes ignorées (faux négatifs). Precision artificiellement élevée. |
-| **SMOTE** | 0.8791 | 0.8163 | **0.8466** | **Excellent équilibre**. Meilleur F1 global. Recommandé. |
-| **ADASYN** | 0.8721 | 0.7653 | 0.8152 | Performances similaires à SMOTE, légère préférence pour le rappel. |
-| **Undersampling** | 0.2019 | 0.8673 | 0.3276 | Trop de faux positifs, inexploitable en production. Perte d'information massive. |
+| **Aucun (brut)** | 0.9286 | 0.7959 | **0.8571** | **Excellent équilibre**. Meilleur F1 global sur ULB. Recommandé pour PCA. |
+| **SMOTE** | 0.4649 | 0.8776 | 0.6078 | Beaucoup de faux positifs. Perte de précision massive. |
+| **ADASYN** | 0.3539 | 0.8776 | 0.5044 | Encore plus de faux positifs que SMOTE. |
+| **Undersampling** | 0.0375 | 0.9184 | 0.0720 | Trop de faux positifs, inexploitable en production. Perte d'information. |
+
+**Dataset Synthétique :**
+| Méthode | Precision | Recall | F1-Score | Observation |
+|:---|---:|---:|---:|:---|
+| **ADASYN** | 0.6397 | 0.7250 | **0.6797** | **Meilleur F1**. Adapté aux relations non-linéaires. |
+| **SMOTE** | 0.6222 | 0.7000 | 0.6588 | Très proche de ADASYN. |
+| **Aucun (brut)** | 0.7778 | 0.4083 | 0.5355 | Beaucoup trop de fraudes ignorées (faux négatifs). |
 
 **Conclusion sur le resampling :**
-- **SMOTE** est la méthode recommandée pour ce projet
-- Équilibre optimal entre précision et rappel
-- ADASYN est une alternative valide si on privilégie le rappel
-- Undersampling est à éviter (perte d'information trop importante)
+- **Aucun resampling (Baseline)** est la méthode recommandée pour le dataset ULB.
+- **ADASYN** est la méthode recommandée pour le dataset synthétique.
+- Pour comparer de manière contrôlée avec le fédéré (qui inclut SMOTE localement), SMOTE est utilisé comme référence de base pour les expériences Multi-Agents.
 
 ---
 
@@ -509,10 +513,10 @@ Les expérimentations confirment que le **Federated Learning est une solution vi
 
 ### Justification du Choix
 
-#### 1. Performance de Détection
-- **F1-Score** : 0.8159 (meilleur parmi les approches fédérées)
-- **AUC-ROC** : 0.9788 (excellente capacité de discrimination)
-- **Perte de performance** : seulement ~3% vs centralisé (0.8619 → 0.8159)
+#### 1. Performance de Détection (Sur dataset ULB)
+- **F1-Score** : 0.8083 (meilleur parmi les approches fédérées)
+- **AUC-ROC** : 0.9752 (excellente capacité de discrimination)
+- **Gain paradoxal** : L'ensemble fédéré fait mieux que le SMOTE centralisé simple (0.8083 vs 0.6078).
 
 #### 2. Explicabilité Native
 - **Compatibilité SHAP** : TreeExplainer quasi-instantané
@@ -545,20 +549,12 @@ Les expérimentations confirment que le **Federated Learning est une solution vi
 | **Latence** | < 100ms | < 100ms | > 200ms |
 | **Collaboration** | ✅ Multi-banques | ❌ Centralisé | ❌ Centralisé |
 
-### Coût de la Confidentialité
+### Limitations Identifiées
 
-La différence de performance entre l'approche centralisée et fédérée représente le **coût de la confidentialité** :
+- **Échec sur le dataset synthétique** : Le Federated Learning via Soft Voting s'effondre sur le dataset synthétique (F1 = 0.1471). La fragmentation des données catégorielles (One-Hot Encoding) sur 25 clients empêche les modèles locaux d'apprendre efficacement les patterns de fraude.
+- **Rôle du Resampling** : La pertinence du resampling dépend fortement de la nature des features (PCA = pas besoin, Catégoriel = ADASYN/SMOTE).
 
-```
-Δ F1-Score  = -0.0460 (perte de 5.3%)
-Δ AUC-ROC   = -0.0045 (perte de 0.5%)
-```
-
-Cette perte est **acceptable** compte tenu des gains :
-- ✅ Conformité RGPD
-- ✅ Collaboration interbancaire
-- ✅ Confiance des clients
-- ✅ Réduction des risques juridiques
+Ces limites soulignent que si le FL est prometteur pour la détection de fraude, il nécessite une stratégie robuste de prétraitement et de gestion des données non-IID pour être viable sur tout type de dataset.
 
 ### Recommandations de Déploiement
 

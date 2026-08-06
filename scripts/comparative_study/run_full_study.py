@@ -7,6 +7,10 @@ Exécute les deux volets, génère les résultats, graphiques et analyse critiqu
 
 import os
 import sys
+
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8')
+
 import time
 import pandas as pd
 import numpy as np
