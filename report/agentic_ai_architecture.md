@@ -74,7 +74,7 @@ CONSIGNES & GUARDRAILS :
 ---
 
 ### Étape 3 — Choose LLM (Choix du Modèle de Langage)
-* **Modèle Principal** : **Google Gemini 2.5 Flash** (via le SDK `google-genai`).
+* **Modèle Principal** : **Ollama (Qwen 2.5)** (via le SDK `Ollama`).
 * **Paramètres** : `Temperature = 0.3` (réponses factuelles), `Max Output Tokens = 500`.
 * **Fallback Strategy** : Si l'API cloud n'est pas accessible ou rencontre un quota (HTTP 429/403), le système bascule automatiquement sur un template de rapport structuré hors-ligne (zero-downtime).
 

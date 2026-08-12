@@ -26,8 +26,9 @@ tensorflow>=2.11.0
 shap>=0.41.0
 
 # LLM / Generative AI
-google-generativeai>=0.3.0
-google-genai>=0.1.1
+# Ollama is used locally — no cloud packages required.
+# Install Ollama from: https://ollama.com and run: ollama pull qwen2.5:7b
+python-dotenv>=1.0.0
 
 # Utilities
 joblib>=1.2.0

@@ -1,5 +1,5 @@
 """
-explanation_agent.py — Agent 4 : Génération d'explications LLM (Gemini 2.5 Flash)
+explanation_agent.py — Agent 4 : Génération d'explications LLM (Qwen 2.5 via Ollama)
 Stage : Système Agentic AI de Détection de Fraude Bancaire
 
 Transformé pour utiliser BaseAgent et LLMGatewayTool.
@@ -12,21 +12,19 @@ from scripts.agents.core.tools import LLMGatewayTool
 
 class ExplanationAgent(BaseAgent):
     """
-    Agent 4 — Explication en langage naturel via LLM (Gemini 2.5 Flash).
+    Agent 4 — Explication en langage naturel via LLM (Qwen 2.5 via Ollama).
     """
 
     AGENT_NAME = "ExplanationAgent"
     AGENT_ROLE = "Génération d'Explications & NLG"
     AGENT_PURPOSE = "Traduire les données SHAP et la décision ML en rapport compréhensible"
 
-    def __init__(self, api_key: str = None, model_name: str = 'gemini-2.5-flash',
-                 temperature: float = 0.3, max_tokens: int = 500,
+    def __init__(self, temperature: float = 0.3, max_tokens: int = 500,
                  config: dict = None, memory=None, tools: dict = None):
         
         tools = tools or {}
         if 'llm_tool' not in tools:
             tools['llm_tool'] = LLMGatewayTool(
-                api_key=api_key, model=model_name,
                 temperature=temperature, max_tokens=max_tokens
             )
 

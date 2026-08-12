@@ -16,7 +16,7 @@ Stage : Détection de Fraude Bancaire avec Agentic AI, LLMs et Federated Learnin
 │  └──────────────┘                                                    │
 │                                                                      │
 │  ┌──────────────┐  Interface unifiée vers les LLMs                  │
-│  │ LLMGateway    │  Gemini 2.5 Flash + fallback offline             │
+│  │ LLMGateway    │  Ollama (Qwen 2.5) + fallback offline            │
 │  └──────────────┘                                                    │
 │                                                                      │
 │  ┌──────────────┐  Notifications et alertes                         │
@@ -325,25 +325,24 @@ class LLMGatewayTool(BaseTool):
     """
     Passerelle LLM unifiée (Étape 3 du blueprint — Choose LLM).
 
-    Supporte :
-    - Google Gemini 2.5 Flash (SDK google-genai)
-    - Fallback vers le SDK legacy (google-generativeai)
-    - Mode hors-ligne (templates structurés)
+    Backend exclusif : Ollama (local, aucune clé API requise).
+    Si Ollama n'est pas joignable, utilise le mode hors-ligne.
+
+    Variables d'environnement Ollama :
+        OLLAMA_BASE_URL  : URL du serveur Ollama (défaut : http://localhost:11434)
+        OLLAMA_MODEL     : Modèle Ollama à utiliser (défaut : qwen2.5:7b)
 
     Paramètres LLM configurables :
     - temperature: Créativité (0.0 = déterministe, 1.0 = créatif)
     - max_tokens:  Longueur max de la réponse
-    - top_p:       Nucleus sampling
-    - model:       Nom du modèle (gemini-2.5-flash)
 
-    Usage:
-        tool = LLMGatewayTool(api_key="...", model="gemini-2.5-flash")
-        result = tool.execute(prompt="Analyse cette transaction...",
-                              system_prompt="Tu es un expert...")
+    Usage :
+        tool = LLMGatewayTool()  # auto-détecte Ollama via les variables .env
+        result = tool.execute(prompt="Analyse cette transaction...")
     """
 
     TOOL_NAME = "LLMGatewayTool"
-    TOOL_DESCRIPTION = "Génération de texte via LLM (Gemini 2.5 Flash)"
+    TOOL_DESCRIPTION = "Génération de texte via LLM (Ollama local)"
 
     # System prompt optimisé pour la détection de fraude
     DEFAULT_SYSTEM_PROMPT = (
@@ -361,71 +360,90 @@ class LLMGatewayTool(BaseTool):
         "6. Cite les features SHAP les plus influentes"
     )
 
-    def __init__(self, api_key: str = None, model: str = "gemini-2.5-flash",
-                 temperature: float = 0.3, max_tokens: int = 600,
+    # URL par défaut du serveur Ollama local
+    DEFAULT_OLLAMA_BASE_URL = "http://localhost:11434"
+    DEFAULT_OLLAMA_MODEL    = "qwen2.5:7b"
+
+    def __init__(self, temperature: float = 0.3, max_tokens: int = 600,
+                 ollama_base_url: str = None, ollama_model: str = None,
                  config: dict = None):
         super().__init__(config)
-        self.model_name = model
         self.temperature = temperature
         self.max_tokens = max_tokens
-        self._client = None
         self._online = False
-        self._sdk_type = None
+        self._sdk_type = None  # 'ollama'
 
-        effective_key = api_key or os.environ.get('GEMINI_API_KEY')
-        if effective_key:
-            self._setup_client(effective_key)
+        # ── 1. Résolution des paramètres Ollama (env > argument > défaut) ──
+        self._ollama_base_url = (
+            ollama_base_url
+            or os.environ.get('OLLAMA_BASE_URL', self.DEFAULT_OLLAMA_BASE_URL)
+        ).rstrip('/')
+        self._ollama_model = (
+            ollama_model
+            or os.environ.get('OLLAMA_MODEL', self.DEFAULT_OLLAMA_MODEL)
+        )
 
-    def _setup_client(self, api_key: str):
-        """Configure le client LLM."""
-        # Tentative nouveau SDK
+        # ── 2. Tentative Ollama en priorité ──
+        if self._setup_ollama():
+            self.model_name = self._ollama_model
+        else:
+            self.model_name = self._ollama_model
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # Setup Backends
+    # ──────────────────────────────────────────────────────────────────────────
+
+    def _setup_ollama(self) -> bool:
+        """
+        Vérifie si Ollama est joignable sur OLLAMA_BASE_URL.
+        Utilise uniquement la bibliothèque standard (urllib) — aucune dépendance.
+        Retourne True si Ollama répond correctement.
+        """
         try:
-            from google import genai
-            self._client = genai.Client(api_key=api_key)
-            self._online = True
-            self._sdk_type = 'new'
-            return
-        except (ImportError, Exception):
-            pass
+            import urllib.request
+            import urllib.error
+            url = f"{self._ollama_base_url}/api/tags"
+            req = urllib.request.Request(url, headers={'User-Agent': 'FraudDetection/1.0'})
+            with urllib.request.urlopen(req, timeout=3) as resp:
+                if resp.status == 200:
+                    self._online = True
+                    self._sdk_type = 'ollama'
+                    print(f"[LLMGateway] OK  Ollama detecte sur {self._ollama_base_url} "
+                          f"-- Modele : {self._ollama_model}")
+                    return True
+        except Exception as e:
+            print(f"[LLMGateway] WARNING Ollama non joignable ({self._ollama_base_url}) : {e}")
+        return False
 
-        # Tentative ancien SDK
-        try:
-            import google.generativeai as genai
-            genai.configure(api_key=api_key)
-            self._client = genai.GenerativeModel(
-                self.model_name,
-                system_instruction=self.DEFAULT_SYSTEM_PROMPT
-            )
-            self._online = True
-            self._sdk_type = 'old'
-        except (ImportError, Exception):
-            self._online = False
+    # ──────────────────────────────────────────────────────────────────────────
+    # Execute
+    # ──────────────────────────────────────────────────────────────────────────
 
     def execute(self, prompt: str = "", system_prompt: str = None,
                 **kwargs) -> dict:
         """
-        Génère du texte via le LLM.
+        Génère du texte via le LLM actif.
 
         Args:
             prompt:        Le prompt utilisateur
             system_prompt: System prompt personnalisé (optionnel)
 
         Returns:
-            dict {text, model, mode, latency_ms}
+            dict {text, model, mode, backend, latency_ms, tokens_approx}
         """
         start = time.time()
         system_prompt = system_prompt or self.DEFAULT_SYSTEM_PROMPT
 
         if self._online:
             try:
-                text = self._call_api(prompt, system_prompt)
+                text = self._call_ollama(prompt, system_prompt)
                 mode = 'online'
             except Exception as e:
                 self._errors.append(str(e))
                 text = f"[LLM indisponible] {str(e)[:100]}"
                 mode = 'error'
         else:
-            text = "[Mode hors-ligne] Le LLM n'est pas configuré."
+            text = "[Mode hors-ligne] Ollama n'est pas configuré ou joignable."
             mode = 'offline'
 
         latency = (time.time() - start) * 1000
@@ -434,40 +452,65 @@ class LLMGatewayTool(BaseTool):
         return {
             'text': text.strip() if text else "",
             'model': self.model_name,
+            'backend': self._sdk_type or 'offline',
             'mode': mode,
             'latency_ms': round(latency, 2),
             'tokens_approx': len(text.split()) if text else 0,
         }
 
-    def _call_api(self, prompt: str, system_prompt: str) -> str:
-        """Appelle l'API du LLM."""
-        if self._sdk_type == 'new':
-            from google.genai import types
-            response = self._client.models.generate_content(
-                model=self.model_name,
-                contents=prompt,
-                config=types.GenerateContentConfig(
-                    system_instruction=system_prompt,
-                    temperature=self.temperature,
-                    max_output_tokens=self.max_tokens,
-                )
-            )
-            return response.text
-        elif self._sdk_type == 'old':
-            import google.generativeai as genai
-            response = self._client.generate_content(
-                prompt,
-                generation_config=genai.types.GenerationConfig(
-                    temperature=self.temperature,
-                    max_output_tokens=self.max_tokens,
-                )
-            )
-            return response.text
-        return ""
+    # ──────────────────────────────────────────────────────────────────────────
+    # Internal API Calls
+    # ──────────────────────────────────────────────────────────────────────────
+
+    def _call_ollama(self, prompt: str, system_prompt: str) -> str:
+        """
+        Appelle l'API Ollama via HTTP (/api/chat — format OpenAI-compatible).
+        Utilise uniquement urllib (stdlib), aucun package tiers requis.
+        """
+        import urllib.request
+        import json as _json
+
+        url = f"{self._ollama_base_url}/api/chat"
+        payload = _json.dumps({
+            "model": self._ollama_model,
+            "stream": False,
+            "options": {
+                "temperature": self.temperature,
+                "num_predict": self.max_tokens,
+            },
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user",   "content": prompt},
+            ],
+        }).encode('utf-8')
+
+        req = urllib.request.Request(
+            url,
+            data=payload,
+            headers={
+                'Content-Type': 'application/json',
+                'User-Agent':   'FraudDetection/1.0',
+            },
+            method='POST',
+        )
+
+        # Timeout généreux car un 7B peut prendre ~30s selon le hardware
+        with urllib.request.urlopen(req, timeout=120) as resp:
+            body = _json.loads(resp.read().decode('utf-8'))
+            return body.get('message', {}).get('content', '')
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # Properties
+    # ──────────────────────────────────────────────────────────────────────────
 
     @property
     def is_online(self) -> bool:
         return self._online
+
+    @property
+    def active_backend(self) -> str:
+        """Retourne le backend actif : 'ollama' ou 'offline'."""
+        return self._sdk_type or 'offline'
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

@@ -161,7 +161,7 @@ probability = 0.92  # Float [0,1], issu de l'Agent 2
 
 ---
 
-## 5. Agent 4 — Explication LLM (Google Gemini 2.5 Flash)
+## 5. Agent 4 — Explication LLM (Ollama (Qwen 2.5))
 
 ### Objectif
 Transformer la sortie mathématique en un **rapport en langage naturel français**, compréhensible par un analyste non technique. L'agent répond à : *"Pourquoi cette transaction a-t-elle été signalée ?"*
@@ -185,7 +185,7 @@ Transformer la sortie mathématique en un **rapport en langage naturel français
     'resume':        str,   # Résumé en 1 phrase pour dashboard
     'features_cles': list,  # Noms des features les plus déterminantes
     'confidence':    str,   # Niveau de confiance de l'explication
-    'mode':          str    # 'online' (Gemini API) | 'offline' (template)
+    'mode':          str    # 'online' (Ollama) | 'offline' (template)
 }
 ```
 
@@ -211,7 +211,7 @@ ACTION : Transaction refusée. Dossier fraude ouvert.
 Notifications : equipe_fraude, client, conformite | SLA : 0 min
 ```
 
-### LLM utilisé : Google Gemini 2.5 Flash
+### LLM utilisé : Ollama (Qwen 2.5)
 - Prompt structuré garantissant des réponses professionnelles en français
 - Mode **fallback offline** (template Python) si API indisponible
 

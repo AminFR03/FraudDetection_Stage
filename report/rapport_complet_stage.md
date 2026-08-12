@@ -362,7 +362,7 @@ Notifications envoyées: equipe_fraude, client, conformite
 ```
 
 **LLM utilisé :**
-- Google Gemini 2.5 Flash
+- Ollama (Qwen 2.5)
 - Mode fallback hors-ligne si API non disponible
 - Prompt structuré pour garantir des réponses professionnelles
 
@@ -589,7 +589,7 @@ Ces limites soulignent que si le FL est prometteur pour la détection de fraude,
 - **XGBoost** : Library pour gradient boosting
 - **TensorFlow/Keras** : Deep learning framework
 - **SHAP** : Explainable AI library
-- **Google Gemini** : LLM pour génération d'explications
+- **Ollama (Qwen)** : LLM pour génération d'explications
 
 ---
 

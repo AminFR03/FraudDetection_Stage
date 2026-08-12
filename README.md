@@ -5,7 +5,7 @@
 ![Architecture Status](https://img.shields.io/badge/Architecture-Multi--Agents-blue)
 ![Machine Learning](https://img.shields.io/badge/ML-XGBoost%20%7C%20RandomForest%20%7C%20DeepLearning-orange)
 ![Federated Learning](https://img.shields.io/badge/Federated%20Learning-FedAvg-green)
-![LLM](https://img.shields.io/badge/LLM-Gemini%202.5%20Flash-yellow)
+![LLM](https://img.shields.io/badge/LLM-Qwen%202.5%207B%20(Ollama)-yellow)
 
 ---
 
@@ -25,7 +25,7 @@
    - **SurveillanceAgent** : Ingestion & filtrage rapide par règles métier.
    - **AnalysisAgent** : Scoring ML & explicabilité localisée via SHAP (TreeExplainer).
    - **DecisionAgent** : Règles de gouvernance & déclenchement d'alertes.
-   - **ExplanationAgent** : Génération de rapports NLG en français avec **Google Gemini 2.5 Flash** (+ fallback offline).
+   - **ExplanationAgent** : Génération de rapports NLG en français avec **Ollama (Qwen 2.5)** (+ fallback offline).
    - **FeedbackAgent & MonitoringAgent** : Boucle rétroactive Human-in-the-Loop et détection de drift.
    - **Memory Systems** : Architecture mémoire 4 couches (Working, Episodic, Semantic, Long-Term SQLite).
 
@@ -59,7 +59,7 @@ FraudDetection_Stage/
 │   └── rapport_technique.md
 ├── results/                      # Résultats comparatifs & alertes (.csv, .jsonl, .md)
 │   ├── comparative_study/        # Logs de l'étude (Volets 1 & 2)
-│   └── results_summary.md        # Résumé des performances finales
+│   └── project_parameters_and_results.md  # Paramètres complets & résultats
 ├── scripts/
 │   ├── agents/                   # Framework Multi-Agents & Démo
 │   │   ├── core/                 # Agent Base, Memory, Tools, Orchestrator
@@ -73,7 +73,6 @@ FraudDetection_Stage/
 │   ├── comparative_study/       # Scripts Volets 1 & 2
 │   ├── federated/               # Algorithmes FedAvg (Soft Voting, Agrégation PyTorch)
 │   └── utils/                   # Utilitaires métriques & prétraitement
-├── .env.example                  # Template des variables d'environnement (Clé API Gemini)
 ├── requirements.txt              # Dépendances Python
 └── README.md
 ```
@@ -92,10 +91,12 @@ pip install -r requirements.txt
 ```
 
 ### 2. Configuration (LLM)
-Créez un fichier `.env` à la racine du projet et ajoutez votre clé API Google Gemini :
+Créez un fichier `.env` à la racine du projet :
 ```env
-GEMINI_API_KEY=votre_cle_api_ici
+OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_MODEL=qwen2.5:7b
 ```
+Assurez-vous qu'**Ollama est installé et démarré** (`ollama pull qwen2.5:7b`) avant d'exécuter le pipeline.
 
 ### 3. Exécuter l'étude comparative complète (Volets 1 & 2)
 > ⚠️ Nécessite la présence de `data/creditcard.csv`.
@@ -121,4 +122,4 @@ Ce projet a été développé dans le cadre d'un stage de fin d'études. Il s'ap
 
 - **Auteur :** [Votre Nom/Stagiaire]
 - **Encadrant :** [Nom de l'encadrant]
-- **Technologies :** Python, XGBoost, Scikit-learn, SHAP, PyTorch, Google Gemini.
+- **Technologies :** Python, XGBoost, Scikit-learn, SHAP, PyTorch, Ollama (Qwen).
