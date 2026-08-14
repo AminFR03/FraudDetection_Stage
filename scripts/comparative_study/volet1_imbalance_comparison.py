@@ -148,27 +148,29 @@ def load_and_prepare_synthetic(path):
 # Application du resampling
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def apply_resampling(X_train, y_train, technique):
+def apply_resampling(X_train, y_train, technique, dataset_name):
     """Applique la technique de resampling spécifiée."""
+    strategy = 0.1 if dataset_name == 'ULB' else 'auto'
+    
     if technique == 'Baseline':
         print(f"    [{technique}] Aucun resampling — {X_train.shape[0]:,} samples")
         return X_train, y_train
 
     elif technique == 'SMOTE':
-        sampler = SMOTE(random_state=RANDOM_STATE)
+        sampler = SMOTE(sampling_strategy=strategy, random_state=RANDOM_STATE)
         X_res, y_res = sampler.fit_resample(X_train, y_train)
         print(f"    [{technique}] {X_train.shape[0]:,} → {X_res.shape[0]:,} samples")
         return X_res, y_res
 
     elif technique == 'ADASYN':
         try:
-            sampler = ADASYN(random_state=RANDOM_STATE)
+            sampler = ADASYN(sampling_strategy=strategy, random_state=RANDOM_STATE)
             X_res, y_res = sampler.fit_resample(X_train, y_train)
             print(f"    [{technique}] {X_train.shape[0]:,} → {X_res.shape[0]:,} samples")
             return X_res, y_res
         except ValueError as e:
             print(f"    [{technique}] ADASYN a échoué ({e}), fallback vers SMOTE")
-            sampler = SMOTE(random_state=RANDOM_STATE)
+            sampler = SMOTE(sampling_strategy=strategy, random_state=RANDOM_STATE)
             X_res, y_res = sampler.fit_resample(X_train, y_train)
             print(f"    [SMOTE fallback] {X_train.shape[0]:,} → {X_res.shape[0]:,} samples")
             return X_res, y_res
@@ -190,7 +192,7 @@ def apply_resampling(X_train, y_train, technique):
 def train_and_evaluate(X_train, y_train, X_test, y_test, technique, dataset_name):
     """Entraîne XGBoost et calcule toutes les métriques."""
     # Resampling
-    X_train_res, y_train_res = apply_resampling(X_train, y_train, technique)
+    X_train_res, y_train_res = apply_resampling(X_train, y_train, technique, dataset_name)
 
     # Entraînement
     model = xgb.XGBClassifier(**XGB_PARAMS)

@@ -138,7 +138,8 @@ def train_centralized(X_train, y_train, X_test, y_test, dataset_name):
     print(f"\n  ▸ Mode CENTRALISÉ — {dataset_name}")
 
     # SMOTE sur tout le train
-    smote = SMOTE(random_state=RANDOM_STATE)
+    strategy = 0.1 if dataset_name == 'ULB' else 'auto'
+    smote = SMOTE(sampling_strategy=strategy, random_state=RANDOM_STATE)
     X_train_res, y_train_res = smote.fit_resample(X_train, y_train)
     print(f"    SMOTE: {X_train.shape[0]:,} → {X_train_res.shape[0]:,} samples")
 
@@ -181,6 +182,8 @@ def train_federated(X_train, y_train, X_test, y_test, dataset_name):
     # Partitionnement en clients
     clients_data = federated_split(X_train, y_train, NUM_CLIENTS)
 
+    strategy = 0.1 if dataset_name == 'ULB' else 'auto'
+
     # Stats par client
     fraud_counts = [int(y.sum()) for _, y in clients_data]
     sizes = [len(y) for _, y in clients_data]
@@ -204,7 +207,7 @@ def train_federated(X_train, y_train, X_test, y_test, dataset_name):
 
             # SMOTE local sur les données du client
             try:
-                smote = SMOTE(random_state=RANDOM_STATE)
+                smote = SMOTE(sampling_strategy=strategy, random_state=RANDOM_STATE)
                 X_c_res, y_c_res = smote.fit_resample(X_c, y_c)
             except ValueError:
                 # Pas assez de samples minoritaires pour SMOTE

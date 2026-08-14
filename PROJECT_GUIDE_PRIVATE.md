@@ -1,4 +1,4 @@
-﻿# 🗺️ PROJECT GUIDE — Explication Complète du Projet
+# 🗺️ PROJECT GUIDE — Explication Complète du Projet
 > Fichier PRIVÉ — Ne pas partager. Référence personnelle complète.
 > Détection de Fraude Bancaire avec Agentic AI, LLMs et Federated Learning.
 
@@ -169,7 +169,7 @@ Les notebooks sont la phase de RECHERCHE du projet. Ils sont exécutés séquent
 ### `07_MultiAgent_System.ipynb`
 **Rôle** : Démonstration du système multi-agents directement dans Jupyter (version auto-contenue).
 **Particularité** : Ce notebook redéfinit les agents localement (classes Python inline) — il ne dépend PAS des scripts/ pour être exécutable seul.
-**Ce qu il fait** : Instancie les 4 agents (Surveillance, Analyse, Décision, Explication), crée un orchestrateur, traite plusieurs transactions réelles et affiche les rapports.
+**Ce qu il fait** : Instancie les 6 agents (Surveillance, Analyse, Décision, Explication, Feedback, Monitoring), crée un orchestrateur, traite plusieurs transactions réelles et affiche les rapports.
 **Agent 4 dans ce notebook** : Utilise `urllib` directement vers Ollama (pas LLMGatewayTool) — les deux approches sont équivalentes.
 **Public** : Ce notebook est ce qu on montre à un encadrant pour une démo rapide.
 

@@ -1,4 +1,4 @@
-﻿# 📊 Project Parameters & Results — Fraud Detection System
+# 📊 Project Parameters & Results — Fraud Detection System
 > **Référence complète** : Tous les paramètres du système, hyperparamètres ML, règles métier et résultats expérimentaux.
 > *Généré dans le cadre du stage : Détection de Fraude Bancaire avec Agentic AI, LLMs et Federated Learning.*
 > *Seed global : `42` | Test split : `20%` | Dataset principal : ULB Credit Card*
@@ -98,9 +98,9 @@
 
 | Technique | Accuracy | Precision | Recall | F1-Score | AUC-ROC | AUC-PR |
 |:---|---:|---:|---:|---:|---:|---:|
-| **Baseline** | 0.9995 | **0.9286** | 0.7959 | **0.8571** | 0.9778 | **0.8724** |
-| **SMOTE** | 0.9981 | 0.4649 | **0.8776** | 0.6078 | **0.9833** | 0.8635 |
-| ADASYN | 0.9970 | 0.3539 | **0.8776** | 0.5044 | 0.9802 | 0.8489 |
+| **Baseline** | 0.9995 | **0.9286** | 0.7959 | **0.8571** | 0.9778 | 0.8724 |
+| **SMOTE** | 0.9992 | 0.7143 | 0.8673 | 0.7834 | **0.9822** | **0.8766** |
+| ADASYN | 0.9990 | 0.6667 | **0.8776** | 0.7577 | 0.9797 | 0.8648 |
 | Undersampling | 0.9593 | 0.0375 | 0.9184 | 0.0720 | 0.9776 | 0.6865 |
 
 **Meilleur F1 sur ULB : Baseline (F1 = 0.8571)**
@@ -128,10 +128,10 @@
 
 | Mode | Accuracy | Precision | Recall | F1-Score | AUC-ROC | AUC-PR |
 |:---|---:|---:|---:|---:|---:|---:|
-| Centralisé (SMOTE) | 0.9981 | 0.4649 | **0.8776** | 0.6078 | **0.9833** | **0.8635** |
-| **Fédéré (FedAvg)** | **0.9994** | **0.8211** | 0.7959 | **0.8083** | 0.9752 | 0.8293 |
+| Centralisé (SMOTE) | 0.9992 | 0.7143 | **0.8673** | 0.7834 | **0.9822** | **0.8766** |
+| **Fédéré (FedAvg)** | **0.9993** | **0.8261** | 0.7755 | **0.8000** | 0.9737 | 0.8392 |
 
-**Résultat clé** : FL agit comme un meta-ensemble (+33% Precision, +32% F1 vs centralisé SMOTE).
+**Résultat clé** : FL agit comme un meta-ensemble (+15% Precision, +2% F1 vs centralisé SMOTE).
 
 ### Dataset Synthétique
 
@@ -151,8 +151,8 @@
 | Paramètre | Valeur |
 |:---|:---|
 | Modèle | **XGBoost Fédéré (ULB)** |
-| F1-Score | **0.8083** |
-| AUC-ROC | **0.9752** |
+| F1-Score | **0.8000** |
+| AUC-ROC | **0.9737** |
 | Justification | Meilleur équilibre Performance / Precision / RGPD |
 
 ---

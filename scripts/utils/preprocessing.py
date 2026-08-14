@@ -102,11 +102,11 @@ def preprocess_ulb(df, test_size=0.2, val_size=0.15, top_k_features=None,
 
     # --- Resampling (sur le train uniquement) ---
     if resampling == 'smote':
-        rs = SMOTE(random_state=random_state)
+        rs = SMOTE(sampling_strategy=0.1, random_state=random_state)
         X_train, y_train_arr = rs.fit_resample(X_train, y_train_arr)
         print(f"[SMOTE] Après resampling: {X_train.shape[0]:,} samples")
     elif resampling == 'adasyn':
-        rs = ADASYN(random_state=random_state)
+        rs = ADASYN(sampling_strategy=0.1, random_state=random_state)
         X_train, y_train_arr = rs.fit_resample(X_train, y_train_arr)
         print(f"[ADASYN] Après resampling: {X_train.shape[0]:,} samples")
     elif resampling == 'undersampling':
