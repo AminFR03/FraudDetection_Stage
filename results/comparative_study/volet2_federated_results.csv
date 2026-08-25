@@ -1,5 +1,5 @@
 Dataset,Mode,Accuracy,Precision,Recall,F1-Score,AUC-ROC,AUC-PR
-ULB,Centralisé,0.9992,0.7143,0.8673,0.7834,0.9822,0.8766
-ULB,Fédéré (FedAvg),0.9993,0.8261,0.7755,0.8,0.9737,0.8392
-Synthétique,Centralisé,0.9957,0.6222,0.7,0.6588,0.9674,0.7008
-Synthétique,Fédéré (FedAvg),0.9942,0.625,0.0833,0.1471,0.9587,0.5034
+ULB,Centralisé,0.9996,0.9518,0.8061,0.8729,0.9828,0.8802
+ULB,Fédéré (FedAvg),0.9994,0.9024,0.7551,0.8222,0.9665,0.8522
+Synthétique,Centralisé,0.9983,0.9135,0.7917,0.8482,0.9899,0.8773
+Synthétique,Fédéré (FedAvg),0.9962,0.6964,0.65,0.6724,0.9823,0.6859

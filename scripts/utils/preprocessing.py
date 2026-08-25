@@ -154,6 +154,9 @@ def preprocess_synthetic(df, use_cols=None, test_size=0.2, resampling='smote',
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=test_size, stratify=y, random_state=random_state)
 
+    # Conserver l'index du test avant scaling (pour df_test_raw)
+    test_index = X_test.index
+
     scaler = StandardScaler()
     X_train_sc = scaler.fit_transform(X_train)
     X_test_sc  = scaler.transform(X_test)
@@ -169,7 +172,7 @@ def preprocess_synthetic(df, use_cols=None, test_size=0.2, resampling='smote',
         'X_test':  X_test_sc,  'y_test':  y_test.values,
         'feature_names': use_cols,
         'scaler': scaler,
-        'df_test_raw': df_clean.iloc[len(X_train):]  # Pour explications lisibles
+        'df_test_raw': df_clean.loc[test_index]      # Lignes test réelles (split aléatoire)
     }
 
 

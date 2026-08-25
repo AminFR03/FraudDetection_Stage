@@ -387,7 +387,7 @@ class LLMGatewayTool(BaseTool):
         if self._setup_ollama():
             self.model_name = self._ollama_model
         else:
-            self.model_name = self._ollama_model
+            self.model_name = "offline"
 
     # ──────────────────────────────────────────────────────────────────────────
     # Setup Backends

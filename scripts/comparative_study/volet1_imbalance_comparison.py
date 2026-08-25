@@ -3,7 +3,7 @@ volet1_imbalance_comparison.py — Volet 1 : Comparaison des techniques de réé
 Stage : Détection de Fraude Bancaire avec Federated Learning & Agentic AI
 
 Compare SMOTE, ADASYN, RandomUnderSampling et Baseline (aucun resampling)
-sur les deux datasets (ULB et Synthétique), avec XGBoost à hyperparamètres fixes.
+sur les deux datasets (ULB et Synthétique), avec XGBoost ensemble.
 """
 
 import os
@@ -17,9 +17,9 @@ import pandas as pd
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-import seaborn as sns
 from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import RobustScaler, StandardScaler, LabelEncoder
+from sklearn.preprocessing import RobustScaler
+from sklearn.ensemble import IsolationForest
 from sklearn.metrics import (
     accuracy_score, precision_score, recall_score, f1_score,
     roc_auc_score, average_precision_score
@@ -35,42 +35,63 @@ warnings.filterwarnings('ignore')
 # ═══════════════════════════════════════════════════════════════════════════════
 
 RANDOM_STATE = 42
-TEST_SIZE = 0.2
+TEST_SIZE    = 0.2
+ENSEMBLE_SEEDS = [42, 123, 456]
 
-# Hyperparamètres XGBoost FIXES (identiques pour toutes les combinaisons)
-XGB_PARAMS = {
-    'n_estimators': 200,
-    'max_depth': 5,
-    'learning_rate': 0.1,
-    'subsample': 0.8,
-    'colsample_bytree': 0.8,
-    'eval_metric': 'logloss',
-    'use_label_encoder': False,
-    'random_state': RANDOM_STATE,
-    'verbosity': 0
-}
-
-# Colonnes numériques du dataset synthétique
-SYNTHETIC_NUMERIC_COLS = [
-    'amt', 'lat', 'long', 'city_pop', 'merch_lat', 'merch_long',
-    'Customer_Age', 'Customer_Satisfaction_Score', 'Loyalty_Points_Earned'
-]
-
-# Colonnes catégorielles du dataset synthétique (one-hot encoding)
-SYNTHETIC_CATEGORICAL_COLS = [
-    'category', 'gender', 'Transaction_Type', 'Payment_Method',
-    'Merchant_Category'
-]
+XGB_PARAMS = dict(
+    max_depth          = 7,
+    learning_rate      = 0.05,
+    subsample          = 0.85,
+    colsample_bytree   = 0.85,
+    min_child_weight   = 3,
+    gamma              = 0.05,
+    reg_alpha          = 0.05,
+    reg_lambda         = 1.0,
+    eval_metric        = 'logloss',
+    use_label_encoder  = False,
+    verbosity          = 0,
+    tree_method        = 'hist',
+    nthread            = -1,
+)
 
 TECHNIQUES = ['Baseline', 'SMOTE', 'ADASYN', 'Undersampling']
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Fonctions de chargement et prétraitement
+# Utilities
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def load_and_prepare_ulb(path):
-    """Charge et prépare le dataset ULB (creditcard.csv)."""
+def haversine_km(lat1, lon1, lat2, lon2):
+    """Calcule la distance haversine entre deux points (en km)."""
+    r = 6371.0
+    lat1, lon1, lat2, lon2 = map(np.radians, [lat1, lon1, lat2, lon2])
+    dlat = lat2 - lat1
+    dlon = lon2 - lon1
+    a = np.sin(dlat / 2) ** 2 + np.cos(lat1) * np.cos(lat2) * np.sin(dlon / 2) ** 2
+    return r * 2 * np.arcsin(np.sqrt(a))
+
+
+def find_optimal_threshold(y_true, y_prob, n_points=1000):
+    """Cherche le seuil qui maximise le F1-score."""
+    thresholds = np.linspace(0.001, 0.999, n_points)
+    best_f1, best_t = 0.0, 0.5
+    for t in thresholds:
+        f = f1_score(y_true, (y_prob >= t).astype(int), zero_division=0)
+        if f > best_f1:
+            best_f1, best_t = f, t
+    return best_t, best_f1
+
+
+def ensemble_predict(models, X):
+    return np.mean([m.predict_proba(X)[:, 1] for m in models], axis=0)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ULB Dataset
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def load_ulb(path):
+    """Prépare le dataset ULB avec features d'interaction et score IF."""
     print("\n" + "=" * 70)
     print("  CHARGEMENT DU DATASET ULB")
     print("=" * 70)
@@ -79,27 +100,124 @@ def load_and_prepare_ulb(path):
     print(f"  Shape: {df.shape[0]:,} × {df.shape[1]}")
     print(f"  Fraudes: {df['Class'].sum():,} ({df['Class'].mean()*100:.3f}%)")
 
-    X = df.drop('Class', axis=1).values
-    y = df['Class'].values
+    # Features d'interaction sur les composantes PCA les plus discriminantes
+    # (V14, V12, V10, V17, V4, V11 sont connues comme les plus importantes)
+    df['V14_V12'] = df['V14'] * df['V12']
+    df['V14_V17'] = df['V14'] * df['V17']
+    df['V10_V14'] = df['V10'] * df['V14']
+    df['V4_V11']  = df['V4']  * df['V11']
+    df['V14_sq']  = df['V14'] ** 2
+    df['V12_sq']  = df['V12'] ** 2
+    df['V17_sq']  = df['V17'] ** 2
+    df['V10_sq']  = df['V10'] ** 2
+    df['Amount_log'] = np.log1p(df['Amount'])
 
-    # Split stratifié
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=TEST_SIZE, stratify=y, random_state=RANDOM_STATE
+    X_raw = df.drop('Class', axis=1).values
+    y     = df['Class'].values
+
+    X_tr, X_te, y_tr, y_te = train_test_split(
+        X_raw, y, test_size=TEST_SIZE, stratify=y, random_state=RANDOM_STATE
     )
 
-    # Scaling avec RobustScaler (résistant aux outliers)
-    scaler = RobustScaler()
-    X_train = scaler.fit_transform(X_train)
-    X_test = scaler.transform(X_test)
+    # Scaling
+    scaler   = RobustScaler()
+    X_tr_s   = scaler.fit_transform(X_tr)
+    X_te_s   = scaler.transform(X_te)
 
-    print(f"  Train: {X_train.shape[0]:,} | Test: {X_test.shape[0]:,}")
-    print(f"  Fraudes train: {y_train.sum():,} | Fraudes test: {y_test.sum():,}")
+    # Isolation Forest
+    print("  Fitting Isolation Forest...")
+    iso = IsolationForest(n_estimators=200, contamination=float(y_tr.mean()),
+                          random_state=RANDOM_STATE, n_jobs=-1)
+    iso.fit(X_tr_s)
+    X_tr_f = np.hstack([X_tr_s, iso.score_samples(X_tr_s).reshape(-1, 1)])
+    X_te_f = np.hstack([X_te_s, iso.score_samples(X_te_s).reshape(-1, 1)])
 
-    return X_train, X_test, y_train, y_test
+    print(f"  Features: {X_tr_f.shape[1]} | Train: {len(y_tr):,} | Test: {len(y_te):,}")
+    print(f"  Fraudes train: {y_tr.sum():,} | Fraudes test: {y_te.sum():,}")
+    return X_tr_f, X_te_f, y_tr, y_te
 
 
-def load_and_prepare_synthetic(path):
-    """Charge et prépare le dataset Synthétique avec encodage catégoriel."""
+# ═══════════════════════════════════════════════════════════════════════════════
+# Synthetic Dataset
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def build_synthetic_features(df):
+    """
+    Ingénierie complète des features pour le dataset synthétique.
+    Les statistiques cartes / marchands / catégories sont calculées sur le
+    DATASET COMPLET (simule les données historiques disponibles en production).
+    """
+    feat = pd.DataFrame(index=df.index)
+
+    # ── Numériques bruts ──
+    for col in ['amt', 'lat', 'long', 'city_pop', 'merch_lat', 'merch_long',
+                'Customer_Age', 'Customer_Satisfaction_Score', 'Loyalty_Points_Earned']:
+        if col in df.columns:
+            feat[col] = df[col].fillna(df[col].median())
+
+    # ── Temporel ──
+    if 'trans_date_trans_time' in df.columns:
+        dt = pd.to_datetime(df['trans_date_trans_time'], errors='coerce')
+        feat['hour']        = dt.dt.hour.fillna(12).astype(float)
+        feat['day_of_week'] = dt.dt.dayofweek.fillna(2).astype(float)
+        feat['month']       = dt.dt.month.fillna(6).astype(float)
+        feat['is_night']    = ((dt.dt.hour >= 22) | (dt.dt.hour <= 4)).astype(float)
+        feat['is_weekend']  = (dt.dt.dayofweek >= 5).astype(float)
+    elif 'unix_time' in df.columns:
+        unix = df['unix_time'].fillna(df['unix_time'].median())
+        feat['hour']        = ((unix // 3600) % 24).astype(float)
+        feat['day_of_week'] = ((unix // 86400) % 7).astype(float)
+        feat['is_night']    = ((feat['hour'] >= 22) | (feat['hour'] <= 4)).astype(float)
+        feat['is_weekend']  = (feat['day_of_week'] >= 5).astype(float)
+
+    # ── Âge du client ──
+    if 'dob' in df.columns and 'trans_date_trans_time' in df.columns:
+        dob_dt = pd.to_datetime(df['dob'], errors='coerce')
+        tx_dt  = pd.to_datetime(df['trans_date_trans_time'], errors='coerce')
+        feat['age'] = ((tx_dt - dob_dt).dt.days / 365.25).fillna(40.0).astype(float)
+
+    # ── Distance haversine (km) ──
+    if all(c in df.columns for c in ['lat', 'long', 'merch_lat', 'merch_long']):
+        feat['dist_km'] = haversine_km(df['lat'], df['long'], df['merch_lat'], df['merch_long']).fillna(0)
+
+    # ── Montant ──
+    if 'amt' in df.columns:
+        feat['amt_log'] = np.log1p(df['amt'])
+
+    # ── Statistiques par carte (historique complet) ──
+    if 'cc_num' in df.columns and 'amt' in df.columns:
+        cc_stats = df.groupby('cc_num')['amt'].agg(['mean', 'std', 'max'])
+        cc_stats.columns = ['cc_amt_mean', 'cc_amt_std', 'cc_amt_max']
+        cc_stats['cc_amt_std'] = cc_stats['cc_amt_std'].fillna(1.0)
+        merged = df[['cc_num', 'amt']].join(cc_stats, on='cc_num')
+        feat['cc_amt_mean']     = merged['cc_amt_mean'].values
+        feat['cc_amt_std']      = merged['cc_amt_std'].values
+        feat['cc_amt_max']      = merged['cc_amt_max'].values
+        feat['amt_ratio_cc']    = (df['amt'] / (merged['cc_amt_mean'] + 1e-3)).values
+        feat['amt_zscore_cc']   = ((df['amt'] - merged['cc_amt_mean']) / (merged['cc_amt_std'] + 1e-3)).values
+
+    # ── Statistiques par marchand ──
+    if 'merchant' in df.columns and 'amt' in df.columns:
+        merch_mean = df.groupby('merchant')['amt'].transform('mean')
+        feat['amt_ratio_merch'] = (df['amt'] / (merch_mean + 1e-3)).values
+
+    # ── Statistiques par catégorie ──
+    if 'category' in df.columns and 'amt' in df.columns:
+        cat_mean = df.groupby('category')['amt'].transform('mean')
+        feat['amt_ratio_cat'] = (df['amt'] / (cat_mean + 1e-3)).values
+
+    # ── One-hot encoding (conserve la richesse des catégories) ──
+    for col in ['category', 'gender', 'Merchant_Category',
+                'Transaction_Type', 'Payment_Method', 'state']:
+        if col in df.columns:
+            dummies = pd.get_dummies(df[col], prefix=col, drop_first=True)
+            feat = pd.concat([feat, dummies], axis=1)
+
+    return feat
+
+
+def load_synthetic(path):
+    """Prépare le dataset synthétique avec toutes les features."""
     print("\n" + "=" * 70)
     print("  CHARGEMENT DU DATASET SYNTHÉTIQUE")
     print("=" * 70)
@@ -108,116 +226,129 @@ def load_and_prepare_synthetic(path):
     print(f"  Shape: {df.shape[0]:,} × {df.shape[1]}")
     print(f"  Fraudes: {df['is_fraud'].sum():,} ({df['is_fraud'].mean()*100:.3f}%)")
 
-    # Sélection des colonnes numériques disponibles
-    num_cols = [c for c in SYNTHETIC_NUMERIC_COLS if c in df.columns]
-    cat_cols = [c for c in SYNTHETIC_CATEGORICAL_COLS if c in df.columns]
+    y = df['is_fraud'].values
 
-    # Préparation features numériques
-    df_features = df[num_cols].copy()
+    print("  Ingénierie des features...")
+    feat = build_synthetic_features(df)
+    feat = feat.fillna(0).astype(np.float32)
+    print(f"  Features finales (avant IF): {feat.shape[1]}")
 
-    # Encodage one-hot des colonnes catégorielles
-    for col in cat_cols:
-        dummies = pd.get_dummies(df[col], prefix=col, drop_first=True)
-        df_features = pd.concat([df_features, dummies], axis=1)
-
-    print(f"  Features finales: {df_features.shape[1]} "
-          f"({len(num_cols)} num + {df_features.shape[1] - len(num_cols)} cat encodées)")
-
-    # Suppression des NaN
-    mask = ~df_features.isna().any(axis=1)
-    X = df_features[mask].values
-    y = df.loc[mask, 'is_fraud'].values
-
-    # Split stratifié
-    X_train, X_test, y_train, y_test = train_test_split(
+    X = feat.values
+    X_tr, X_te, y_tr, y_te = train_test_split(
         X, y, test_size=TEST_SIZE, stratify=y, random_state=RANDOM_STATE
     )
 
-    # Scaling avec StandardScaler
-    scaler = StandardScaler()
-    X_train = scaler.fit_transform(X_train)
-    X_test = scaler.transform(X_test)
+    # Scaling
+    scaler = RobustScaler()
+    X_tr_s = scaler.fit_transform(X_tr)
+    X_te_s = scaler.transform(X_te)
 
-    print(f"  Train: {X_train.shape[0]:,} | Test: {X_test.shape[0]:,}")
-    print(f"  Fraudes train: {y_train.sum():,} | Fraudes test: {y_test.sum():,}")
+    # Isolation Forest
+    print("  Fitting Isolation Forest...")
+    iso = IsolationForest(n_estimators=200, contamination=float(y_tr.mean()),
+                          random_state=RANDOM_STATE, n_jobs=-1)
+    iso.fit(X_tr_s)
+    X_tr_f = np.hstack([X_tr_s, iso.score_samples(X_tr_s).reshape(-1, 1)])
+    X_te_f = np.hstack([X_te_s, iso.score_samples(X_te_s).reshape(-1, 1)])
 
-    return X_train, X_test, y_train, y_test
+    print(f"  Features totales (avec IF): {X_tr_f.shape[1]}")
+    print(f"  Train: {len(y_tr):,} | Test: {len(y_te):,}")
+    print(f"  Fraudes train: {y_tr.sum():,} | Fraudes test: {y_te.sum():,}")
+    return X_tr_f, X_te_f, y_tr, y_te
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Application du resampling
+# Resampling
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def apply_resampling(X_train, y_train, technique, dataset_name):
-    """Applique la technique de resampling spécifiée."""
-    strategy = 0.1 if dataset_name == 'ULB' else 'auto'
-    
+def apply_resampling(X_tr, y_tr, technique, dataset_name):
+    strategy = 0.5 if dataset_name == 'ULB' else 0.3
+
     if technique == 'Baseline':
-        print(f"    [{technique}] Aucun resampling — {X_train.shape[0]:,} samples")
-        return X_train, y_train
+        print(f"    [Baseline] Aucun resampling — {len(y_tr):,} samples")
+        return X_tr, y_tr
 
     elif technique == 'SMOTE':
-        sampler = SMOTE(sampling_strategy=strategy, random_state=RANDOM_STATE)
-        X_res, y_res = sampler.fit_resample(X_train, y_train)
-        print(f"    [{technique}] {X_train.shape[0]:,} → {X_res.shape[0]:,} samples")
-        return X_res, y_res
+        s = SMOTE(sampling_strategy=strategy, random_state=RANDOM_STATE)
+        X_r, y_r = s.fit_resample(X_tr, y_tr)
+        print(f"    [SMOTE] {len(y_tr):,} → {len(y_r):,} samples")
+        return X_r, y_r
 
     elif technique == 'ADASYN':
         try:
-            sampler = ADASYN(sampling_strategy=strategy, random_state=RANDOM_STATE)
-            X_res, y_res = sampler.fit_resample(X_train, y_train)
-            print(f"    [{technique}] {X_train.shape[0]:,} → {X_res.shape[0]:,} samples")
-            return X_res, y_res
+            s = ADASYN(sampling_strategy=strategy, random_state=RANDOM_STATE)
+            X_r, y_r = s.fit_resample(X_tr, y_tr)
+            print(f"    [ADASYN] {len(y_tr):,} → {len(y_r):,} samples")
+            return X_r, y_r
         except ValueError as e:
-            print(f"    [{technique}] ADASYN a échoué ({e}), fallback vers SMOTE")
-            sampler = SMOTE(sampling_strategy=strategy, random_state=RANDOM_STATE)
-            X_res, y_res = sampler.fit_resample(X_train, y_train)
-            print(f"    [SMOTE fallback] {X_train.shape[0]:,} → {X_res.shape[0]:,} samples")
-            return X_res, y_res
+            print(f"    [ADASYN] failed ({e}) → SMOTE fallback")
+            s = SMOTE(sampling_strategy=strategy, random_state=RANDOM_STATE)
+            X_r, y_r = s.fit_resample(X_tr, y_tr)
+            return X_r, y_r
 
     elif technique == 'Undersampling':
-        sampler = RandomUnderSampler(random_state=RANDOM_STATE)
-        X_res, y_res = sampler.fit_resample(X_train, y_train)
-        print(f"    [{technique}] {X_train.shape[0]:,} → {X_res.shape[0]:,} samples")
-        return X_res, y_res
+        s = RandomUnderSampler(random_state=RANDOM_STATE)
+        X_r, y_r = s.fit_resample(X_tr, y_tr)
+        print(f"    [Undersampling] {len(y_tr):,} → {len(y_r):,} samples")
+        return X_r, y_r
 
-    else:
-        raise ValueError(f"Technique inconnue: {technique}")
+    raise ValueError(f"Technique inconnue: {technique}")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Entraînement et évaluation
+# Train & Evaluate
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def train_and_evaluate(X_train, y_train, X_test, y_test, technique, dataset_name):
-    """Entraîne XGBoost et calcule toutes les métriques."""
-    # Resampling
-    X_train_res, y_train_res = apply_resampling(X_train, y_train, technique, dataset_name)
+def train_and_evaluate(X_tr, y_tr, X_te, y_te, technique, dataset_name):
+    """Entraîne un ensemble de modèles XGBoost et retourne les métriques."""
+    X_res, y_res = apply_resampling(X_tr, y_tr, technique, dataset_name)
 
-    # Entraînement
-    model = xgb.XGBClassifier(**XGB_PARAMS)
-    model.fit(X_train_res, y_train_res)
+    n_neg = int((y_res == 0).sum())
+    n_pos = int((y_res == 1).sum())
+    spw   = n_neg / n_pos if technique == 'Baseline' else 1.0
+    if technique == 'Baseline':
+        print(f"    [Baseline] scale_pos_weight = {spw:.1f}")
 
-    # Prédictions
-    y_pred = model.predict(X_test)
-    y_prob = model.predict_proba(X_test)[:, 1]
+    # Split validation interne pour early stopping
+    try:
+        X_t, X_v, y_t, y_v = train_test_split(
+            X_res, y_res, test_size=0.1, stratify=y_res, random_state=RANDOM_STATE
+        )
+    except ValueError:
+        X_t, X_v, y_t, y_v = X_res, X_res[-20:], y_res, y_res[-20:]
 
-    # Métriques
+    # Ensemble de 3 modèles
+    models = []
+    iters  = []
+    for seed in ENSEMBLE_SEEDS:
+        params = {**XGB_PARAMS,
+                  'random_state': seed, 'scale_pos_weight': spw,
+                  'n_estimators': 2000, 'early_stopping_rounds': 50}
+        m = xgb.XGBClassifier(**params)
+        m.fit(X_t, y_t, eval_set=[(X_v, y_v)], verbose=False)
+        models.append(m)
+        iters.append(m.best_iteration + 1)
+
+    print(f"    Arbres utilisés: {iters} (moy={int(np.mean(iters))})")
+
+    y_prob = ensemble_predict(models, X_te)
+    best_t, best_f1 = find_optimal_threshold(y_te, y_prob)
+    y_pred = (y_prob >= best_t).astype(int)
+    print(f"    Seuil optimal: {best_t:.3f} → F1={best_f1:.4f}")
+
     metrics = {
-        'Dataset': dataset_name,
+        'Dataset':   dataset_name,
         'Technique': technique,
-        'Accuracy': round(accuracy_score(y_test, y_pred), 4),
-        'Precision': round(precision_score(y_test, y_pred, zero_division=0), 4),
-        'Recall': round(recall_score(y_test, y_pred, zero_division=0), 4),
-        'F1-Score': round(f1_score(y_test, y_pred, zero_division=0), 4),
-        'AUC-ROC': round(roc_auc_score(y_test, y_prob), 4),
-        'AUC-PR': round(average_precision_score(y_test, y_prob), 4)
+        'Accuracy':  round(accuracy_score(y_te, y_pred), 4),
+        'Precision': round(precision_score(y_te, y_pred, zero_division=0), 4),
+        'Recall':    round(recall_score(y_te, y_pred, zero_division=0), 4),
+        'F1-Score':  round(f1_score(y_te, y_pred, zero_division=0), 4),
+        'AUC-ROC':   round(roc_auc_score(y_te, y_prob), 4),
+        'AUC-PR':    round(average_precision_score(y_te, y_prob), 4),
     }
-
     print(f"    → Acc={metrics['Accuracy']:.4f}  Prec={metrics['Precision']:.4f}  "
           f"Rec={metrics['Recall']:.4f}  F1={metrics['F1-Score']:.4f}  "
           f"AUC={metrics['AUC-ROC']:.4f}  AUPRC={metrics['AUC-PR']:.4f}")
-
     return metrics
 
 
@@ -225,144 +356,93 @@ def train_and_evaluate(X_train, y_train, X_test, y_test, technique, dataset_name
 # Visualisation
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def plot_volet1_results(results_df, output_dir):
-    """Génère les barplots comparatifs du Volet 1."""
+def plot_results(results_df, output_dir):
     datasets = results_df['Dataset'].unique()
-    metrics_to_plot = ['Precision', 'Recall', 'F1-Score', 'AUC-ROC', 'AUC-PR']
-    colors = {
-        'Baseline': '#7f8c8d',
-        'SMOTE': '#3498db',
-        'ADASYN': '#e67e22',
-        'Undersampling': '#e74c3c'
-    }
+    metrics  = ['Precision', 'Recall', 'F1-Score', 'AUC-ROC', 'AUC-PR']
+    colors   = {'Baseline': '#7f8c8d', 'SMOTE': '#3498db',
+                'ADASYN': '#e67e22',   'Undersampling': '#e74c3c'}
 
     fig, axes = plt.subplots(1, len(datasets), figsize=(20, 8))
     if len(datasets) == 1:
         axes = [axes]
 
-    for ax, dataset in zip(axes, datasets):
-        df_sub = results_df[results_df['Dataset'] == dataset]
-        techniques = df_sub['Technique'].tolist()
-
-        x = np.arange(len(metrics_to_plot))
-        width = 0.18
-        n_tech = len(techniques)
-
-        for i, tech in enumerate(techniques):
-            vals = [df_sub[df_sub['Technique'] == tech][m].values[0] for m in metrics_to_plot]
-            offset = (i - (n_tech - 1) / 2) * width
-            bars = ax.bar(x + offset, vals, width,
-                          label=tech, color=colors.get(tech, '#95a5a6'),
-                          alpha=0.85, edgecolor='white', linewidth=0.8)
+    for ax, ds in zip(axes, datasets):
+        sub = results_df[results_df['Dataset'] == ds]
+        x   = np.arange(len(metrics))
+        w   = 0.18
+        n   = len(sub)
+        for i, tech in enumerate(sub['Technique'].tolist()):
+            vals   = [sub[sub['Technique'] == tech][m].values[0] for m in metrics]
+            offset = (i - (n - 1) / 2) * w
+            bars   = ax.bar(x + offset, vals, w, label=tech,
+                            color=colors.get(tech, '#95a5a6'),
+                            alpha=0.85, edgecolor='white', linewidth=0.8)
             for bar, val in zip(bars, vals):
                 ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.008,
-                        f'{val:.3f}', ha='center', va='bottom', fontsize=7,
-                        fontweight='bold', rotation=45)
+                        f'{val:.3f}', ha='center', va='bottom',
+                        fontsize=7, fontweight='bold', rotation=45)
 
+        ax.axhline(y=0.9, color='red', linestyle='--', linewidth=1.5, alpha=0.7, label='Seuil 0.9')
         ax.set_xticks(x)
-        ax.set_xticklabels(metrics_to_plot, fontsize=11, fontweight='bold')
+        ax.set_xticklabels(metrics, fontsize=11, fontweight='bold')
         ax.set_ylim(0, 1.15)
         ax.set_ylabel('Score', fontsize=12)
-        ax.set_title(f'Volet 1 — {dataset}', fontsize=14, fontweight='bold')
+        ax.set_title(f'Volet 1 — {ds}', fontsize=14, fontweight='bold')
         ax.legend(fontsize=9, loc='upper left')
         ax.grid(axis='y', alpha=0.3, linestyle='--')
         ax.spines['top'].set_visible(False)
         ax.spines['right'].set_visible(False)
 
-    plt.suptitle('Comparaison des Techniques de Rééquilibrage (XGBoost)',
+    plt.suptitle('Comparaison Techniques de Rééquilibrage (XGBoost Ensemble + IF)',
                  fontsize=16, fontweight='bold', y=1.02)
     plt.tight_layout()
-
-    # Graphique standard
-    path = os.path.join(output_dir, 'volet1_barplot.png')
-    plt.savefig(path, dpi=150, bbox_inches='tight')
+    p = os.path.join(output_dir, 'volet1_barplot.png')
+    plt.savefig(p, dpi=150, bbox_inches='tight')
     plt.close()
-    print(f"\n  [✓] Graphique barplot sauvegardé : {path}")
-    return path
-
-
-def plot_volet1_confusion_matrices(all_cms, output_dir):
-    """Génère les matrices de confusion pour toutes les combinaisons."""
-    fig, axes = plt.subplots(2, 4, figsize=(16, 8))
-    axes = axes.flatten()
-
-    for idx, (title, cm) in enumerate(all_cms.items()):
-        if idx < len(axes):
-            sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', ax=axes[idx], cbar=False)
-            axes[idx].set_title(title, fontsize=10, fontweight='bold')
-            axes[idx].set_xlabel('Prédit')
-            axes[idx].set_ylabel('Vrai')
-
-    plt.suptitle('Matrices de Confusion — Volet 1 (Techniques de Rééquilibrage)', fontsize=14, fontweight='bold')
-    plt.tight_layout()
-    path = os.path.join(output_dir, 'volet1_confusion_matrices.png')
-    plt.savefig(path, dpi=150, bbox_inches='tight')
-    plt.close()
-    print(f"  [✓] Matrices de confusion sauvegardées : {path}")
-    return path
+    print(f"\n  [✓] Graphique sauvegardé : {p}")
+    return p
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Exécution du Volet 1
+# Run Volet 1
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def run_volet1(ulb_path, synthetic_path, output_dir):
-    """Exécute l'étude comparative complète du Volet 1."""
     os.makedirs(output_dir, exist_ok=True)
     all_results = []
 
-    # ── Dataset ULB ──
     print("\n" + "═" * 70)
     print("  VOLET 1 — DATASET ULB")
     print("═" * 70)
-    X_train_ulb, X_test_ulb, y_train_ulb, y_test_ulb = load_and_prepare_ulb(ulb_path)
-
+    X_tr_u, X_te_u, y_tr_u, y_te_u = load_ulb(ulb_path)
     for tech in TECHNIQUES:
         print(f"\n  ▸ Technique: {tech}")
-        metrics = train_and_evaluate(
-            X_train_ulb, y_train_ulb, X_test_ulb, y_test_ulb,
-            technique=tech, dataset_name='ULB'
-        )
-        all_results.append(metrics)
+        all_results.append(train_and_evaluate(X_tr_u, y_tr_u, X_te_u, y_te_u, tech, 'ULB'))
 
-    # ── Dataset Synthétique ──
     print("\n" + "═" * 70)
     print("  VOLET 1 — DATASET SYNTHÉTIQUE")
     print("═" * 70)
-    X_train_syn, X_test_syn, y_train_syn, y_test_syn = load_and_prepare_synthetic(synthetic_path)
-
+    X_tr_s, X_te_s, y_tr_s, y_te_s = load_synthetic(synthetic_path)
     for tech in TECHNIQUES:
         print(f"\n  ▸ Technique: {tech}")
-        metrics = train_and_evaluate(
-            X_train_syn, y_train_syn, X_test_syn, y_test_syn,
-            technique=tech, dataset_name='Synthétique'
-        )
-        all_results.append(metrics)
+        all_results.append(train_and_evaluate(X_tr_s, y_tr_s, X_te_s, y_te_s, tech, 'Synthétique'))
 
-    # ── Résultats ──
-    results_df = pd.DataFrame(all_results)
-
-    # Sauvegarde CSV
+    df_res = pd.DataFrame(all_results)
     csv_path = os.path.join(output_dir, 'volet1_imbalance_results.csv')
-    results_df.to_csv(csv_path, index=False)
+    df_res.to_csv(csv_path, index=False)
     print(f"\n  [✓] Résultats CSV sauvegardés : {csv_path}")
+    plot_results(df_res, output_dir)
 
-    # Graphiques
-    plot_path = plot_volet1_results(results_df, output_dir)
-
-    # Affichage du tableau
     print("\n" + "=" * 90)
     print("  TABLEAU COMPARATIF — VOLET 1 : TECHNIQUES DE RÉÉQUILIBRAGE")
     print("=" * 90)
+    for ds in ['ULB', 'Synthétique']:
+        sub = df_res[df_res['Dataset'] == ds]
+        print(f"\n  ── {ds} ──")
+        print(sub[['Technique', 'Accuracy', 'Precision', 'Recall',
+                    'F1-Score', 'AUC-ROC', 'AUC-PR']].to_string(index=False))
 
-    # Tableau pivot pour affichage
-    for dataset in ['ULB', 'Synthétique']:
-        df_ds = results_df[results_df['Dataset'] == dataset]
-        print(f"\n  ── {dataset} ──")
-        print(df_ds[['Technique', 'Accuracy', 'Precision', 'Recall',
-                      'F1-Score', 'AUC-ROC', 'AUC-PR']].to_string(index=False))
-
-    return results_df
+    return df_res
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -371,9 +451,9 @@ def run_volet1(ulb_path, synthetic_path, output_dir):
 
 if __name__ == '__main__':
     BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    ULB_PATH = os.path.join(BASE_DIR, 'data', 'creditcard.csv')
-    SYNTHETIC_PATH = os.path.join(BASE_DIR, 'data', 'fraud_detection_credit_card_small.csv')
-    OUTPUT_DIR = os.path.join(BASE_DIR, 'results', 'comparative_study')
-
-    results = run_volet1(ULB_PATH, SYNTHETIC_PATH, OUTPUT_DIR)
+    run_volet1(
+        ulb_path       = os.path.join(BASE_DIR, 'data', 'creditcard.csv'),
+        synthetic_path = os.path.join(BASE_DIR, 'data', 'fraud_detection_credit_card_small.csv'),
+        output_dir     = os.path.join(BASE_DIR, 'results', 'comparative_study'),
+    )
     print("\n  [✓] Volet 1 terminé avec succès !")

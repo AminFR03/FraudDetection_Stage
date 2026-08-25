@@ -40,26 +40,38 @@
 
 **Script** : `scripts/comparative_study/volet1_imbalance_comparison.py`
 
-### Hyperparamètres XGBoost (identiques pour toutes les techniques)
+### Hyperparamètres XGBoost (Ensemble de 3 modèles, Early Stopping)
 
 | Paramètre | Valeur |
 |:---|:---:|
-| `n_estimators` | **200** |
-| `max_depth` | **5** |
-| `learning_rate` | **0.1** |
-| `subsample` | **0.8** |
-| `colsample_bytree` | **0.8** |
+| `n_estimators` (max) | **2000** |
+| `early_stopping_rounds` | **50** |
+| `max_depth` | **7** |
+| `learning_rate` | **0.05** |
+| `subsample` | **0.85** |
+| `colsample_bytree` | **0.85** |
+| `min_child_weight` | **3** |
+| `gamma` | **0.05** |
 | `eval_metric` | `logloss` |
-| `random_state` | **42** |
+| Ensemble | **3 seeds** (42, 123, 456) |
+| Seuil décision | **Optimal F1** (1000 points) |
+| `tree_method` | `hist` |
+
+### Ingénierie des features
+
+| Dataset | Ajouts clés |
+|:---|:---|
+| **ULB** | Interactions PCA (V14×V12, V14×V17, V10×V14, V4×V11, V14², V12², V17², V10²), log(Amount), score Isolation Forest |
+| **Synthétique** | Ratios montant carte (cc_amt_mean/std/max, amt_ratio_cc, amt_zscore_cc), ratios marchand/catégorie, distance Haversine (km), âge client, features temporelles, score Isolation Forest |
 
 ### Techniques comparées
 
-| Technique | Librairie | Paramètres spécifiques |
-|:---|:---|:---|
-| **Baseline** | — | Aucun resampling |
-| **SMOTE** | `imbalanced-learn` | `random_state=42` |
-| **ADASYN** | `imbalanced-learn` | `random_state=42` |
-| **Undersampling** | `imbalanced-learn.RandomUnderSampler` | `random_state=42` |
+| Technique | Librairie | `sampling_strategy` |
+|:---|:---|:---:|
+| **Baseline** | — | — (scale_pos_weight auto) |
+| **SMOTE** | `imbalanced-learn` | 0.5 (ULB) / 0.3 (Syn.) |
+| **ADASYN** | `imbalanced-learn` | 0.5 (ULB) / 0.3 (Syn.) |
+| **Undersampling** | `imbalanced-learn.RandomUnderSampler` | balanced |
 
 ---
 
@@ -71,10 +83,11 @@
 
 | Paramètre | Valeur | Description |
 |:---|:---:|:---|
-| `NUM_CLIENTS` | **25** | Banques fictives simulées |
-| `CLIENTS_PER_ROUND` | **10** | Banques participantes par round (40%) |
-| `NUM_ROUNDS` | **10** | Rounds fédérés totaux |
-| Méthode d agrégation | **Soft Voting** | Moyenne des probabilités sur tous les clients |
+| `NUM_CLIENTS` | **10** | Banques fictives simulées |
+| `CLIENTS_PER_ROUND` | **8** | Banques participantes par round (80%) |
+| `NUM_ROUNDS` | **12** | Rounds fédérés totaux |
+| Méthode d agrégation | **Soft Voting** | Moyenne des probabilités sur tous les modèles |
+| Partition clients | **Stratifiée** | Fraudes garanties dans chaque partition |
 | Resampling local | **SMOTE** | Appliqué indépendamment chez chaque client |
 | `random_state` | **42** | Reproductibilité |
 
@@ -82,39 +95,40 @@
 
 | Paramètre | Valeur |
 |:---|:---:|
-| `n_estimators` | **200** |
-| `max_depth` | **5** |
-| `learning_rate` | **0.1** |
-| `subsample` | **0.8** |
-| `colsample_bytree` | **0.8** |
+| `n_estimators` (max) | **2000** |
+| `early_stopping_rounds` | **30** (client) / **50** (centralisé) |
+| `max_depth` | **7** |
+| `learning_rate` | **0.05** |
+| `subsample` | **0.85** |
+| `colsample_bytree` | **0.85** |
 
 ---
 
 ## 📈 Résultats Volet 1 — Impact du Resampling
 
-> Modèle : **XGBoost** | Seed : `42` | Test split : 20%
+> Modèle : **XGBoost Ensemble (3 modèles)** + Isolation Forest | Seed : `42` | Test split : 20%
 
 ### Dataset ULB
 
 | Technique | Accuracy | Precision | Recall | F1-Score | AUC-ROC | AUC-PR |
 |:---|---:|---:|---:|---:|---:|---:|
-| **Baseline** | 0.9995 | **0.9286** | 0.7959 | **0.8571** | 0.9778 | 0.8724 |
-| **SMOTE** | 0.9992 | 0.7143 | 0.8673 | 0.7834 | **0.9822** | **0.8766** |
-| ADASYN | 0.9990 | 0.6667 | **0.8776** | 0.7577 | 0.9797 | 0.8648 |
-| Undersampling | 0.9593 | 0.0375 | 0.9184 | 0.0720 | 0.9776 | 0.6865 |
+| **Baseline** | 0.9996 | **0.9747** | 0.7857 | 0.8701 | 0.9788 | 0.8817 |
+| **SMOTE** | 0.9996 | 0.9518 | 0.8061 | 0.8729 | **0.9828** | 0.8802 |
+| **ADASYN** | 0.9996 | 0.9750 | 0.7959 | **0.8764** | 0.9812 | 0.8739 |
+| Undersampling | 0.9993 | 0.8333 | 0.7653 | 0.7979 | 0.9757 | **0.8817** |
 
-**Meilleur F1 sur ULB : Baseline (F1 = 0.8571)**
+**Meilleur F1 sur ULB : ADASYN (F1 = 0.8764) | Meilleure Précision : ADASYN (0.9750)**
 
 ### Dataset Synthétique
 
 | Technique | Accuracy | Precision | Recall | F1-Score | AUC-ROC | AUC-PR |
 |:---|---:|---:|---:|---:|---:|---:|
-| **ADASYN** | 0.9959 | **0.6397** | **0.7250** | **0.6797** | 0.9761 | **0.7245** |
-| SMOTE | 0.9957 | 0.6222 | 0.7000 | 0.6588 | 0.9674 | 0.7008 |
-| Baseline | 0.9958 | 0.7778 | 0.4083 | 0.5355 | **0.9826** | 0.6821 |
-| Undersampling | 0.9307 | 0.0746 | 0.9250 | 0.1381 | 0.9776 | 0.3452 |
+| **Baseline** | 0.9986 | **0.9694** | 0.7917 | **0.8716** | **0.9911** | **0.9001** |
+| SMOTE | 0.9983 | 0.9135 | 0.7917 | 0.8482 | 0.9899 | 0.8773 |
+| ADASYN | 0.9982 | 0.8621 | **0.8333** | 0.8475 | 0.9899 | 0.8811 |
+| Undersampling | 0.9943 | 0.5203 | 0.6417 | 0.5746 | 0.9842 | 0.5518 |
 
-**Meilleur F1 sur Synthétique : ADASYN (F1 = 0.6797)**
+**Meilleur F1 sur Synthétique : Baseline (F1 = 0.8716) | AUC-PR = 0.9001 ✓**
 
 **Technique retenue pour Volet 2** : **SMOTE** (standard de référence contrôlé).
 
@@ -122,25 +136,25 @@
 
 ## 📈 Résultats Volet 2 — Centralisé vs Federated Learning
 
-> Modèle : **XGBoost + SMOTE** | Seed : `42` | 25 clients, 10 rounds, Soft Voting
+> Modèle : **XGBoost Ensemble + SMOTE** | Seed : `42` | 10 clients, 12 rounds, Soft Voting
 
 ### Dataset ULB
 
 | Mode | Accuracy | Precision | Recall | F1-Score | AUC-ROC | AUC-PR |
 |:---|---:|---:|---:|---:|---:|---:|
-| Centralisé (SMOTE) | 0.9992 | 0.7143 | **0.8673** | 0.7834 | **0.9822** | **0.8766** |
-| **Fédéré (FedAvg)** | **0.9993** | **0.8261** | 0.7755 | **0.8000** | 0.9737 | 0.8392 |
+| **Centralisé (SMOTE)** | 0.9996 | **0.9518** | **0.8061** | **0.8729** | **0.9828** | **0.8802** |
+| Fédéré (FedAvg) | 0.9994 | 0.9024 | 0.7551 | 0.8222 | 0.9665 | 0.8522 |
 
-**Résultat clé** : FL agit comme un meta-ensemble (+15% Precision, +2% F1 vs centralisé SMOTE).
+**Résultat clé ULB** : Centralisé surpasse Fédéré de 0.0507 en F1 (−6.2%). FL conserve Précision > 0.90 (0.9024).
 
 ### Dataset Synthétique
 
 | Mode | Accuracy | Precision | Recall | F1-Score | AUC-ROC | AUC-PR |
 |:---|---:|---:|---:|---:|---:|---:|
-| **Centralisé (SMOTE)** | 0.9957 | 0.6222 | **0.7000** | **0.6588** | **0.9674** | **0.7008** |
-| Fédéré (FedAvg) | 0.9942 | **0.6250** | 0.0833 | 0.1471 | 0.9587 | 0.5034 |
+| **Centralisé (SMOTE)** | 0.9983 | **0.9135** | **0.7917** | **0.8482** | **0.9899** | **0.8773** |
+| Fédéré (FedAvg) | 0.9962 | 0.6964 | 0.6500 | 0.6724 | 0.9823 | 0.6859 |
 
-**Echec FL sur Synthétique** : Recall = 8.3% — fragmentation des features One-Hot sur 25 clients (non-IID).
+**Résultat clé Synthétique** : Centralisé surpasse Fédéré de 0.1758 en F1 (−20.7%). Le FL maintient AUC-ROC = 0.9823 — excellente discrimination globale.
 
 ---
 
@@ -150,10 +164,13 @@
 
 | Paramètre | Valeur |
 |:---|:---|
-| Modèle | **XGBoost Fédéré (ULB)** |
-| F1-Score | **0.8000** |
-| AUC-ROC | **0.9737** |
-| Justification | Meilleur équilibre Performance / Precision / RGPD |
+| Modèle | **XGBoost Ensemble Centralisé + SMOTE (ULB)** |
+| F1-Score | **0.8729** |
+| Précision | **0.9518** |
+| Recall | **0.8061** |
+| AUC-ROC | **0.9828** |
+| AUC-PR | **0.8802** |
+| Justification | Meilleur équilibre F1/Précision, Précision > 0.95, état de l’art ULB |
 
 ---
 

@@ -31,10 +31,12 @@ def run_demo():
 
     # 1. Préparation d'un faux modèle et explainer pour le test
     feature_names = [f'V{i}' for i in range(1, 29)] + ['Amount']
-    X_dummy = np.random.randn(100, len(feature_names))
-    y_dummy = np.random.choice([0, 1], size=100, p=[0.9, 0.1])
-    
-    model = xgb.XGBClassifier(n_estimators=10, max_depth=3)
+    rng = np.random.default_rng(42)
+    X_dummy = rng.standard_normal((200, len(feature_names)))
+    # Garantir les 2 classes : 150 légitimes + 50 fraudes
+    y_dummy = np.array([0] * 150 + [1] * 50)
+
+    model = xgb.XGBClassifier(n_estimators=10, max_depth=3, random_state=42)
     model.fit(X_dummy, y_dummy)
     explainer = shap.TreeExplainer(model)
 

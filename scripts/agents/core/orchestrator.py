@@ -158,6 +158,12 @@ class OrchestratorAgent:
             trace_id=trace_id
         )
 
+        # ── Compteurs de workflow ────────────────────────────────────────────
+        if workflow_name == 'standard':
+            self._standard_count += 1
+        elif workflow_name == 'escalation':
+            self._escalation_count += 1
+
         agent_responses: Dict[str, AgentResponse] = {}
         current_data = {'transaction': transaction, 'transaction_id': tx_id}
 
